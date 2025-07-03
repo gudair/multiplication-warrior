@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guerrero vs Bestias</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+  <style>
+      body {
+          margin: 0;
+          padding: 0;
+          background: #000;
+      }
+      canvas {
+          display: block;
+          margin: 0 auto;
+      }
+  </style>
+</head>
+<body>
+<script>
+    class PreloadScene extends Phaser.Scene {
+        constructor() {
+            super('PreloadScene');
+        }
+        preload() {
+            this.load.image('player', 'assets/warrior.png');
+            this.load.image('enemy1', 'assets/enemies/beast1.png');
+        }
+        create() {
+            this.scene.start('IntroScene');
+        }
+    }
+
+    class IntroScene extends Phaser.Scene {
+        constructor() {
+            super('IntroScene');
+        }
+        create() {
+            const { width, height } = this.scale;
+            this.add.text(width / 2, height / 2, '¡Prepárate para jugar!', {
+                fontSize: '24px',
+                color: '#ffffff',
+            }).setOrigin(0.5);
+
+            this.time.delayedCall(2000, () => {
+                this.scene.start('WorldScene');
+            });
+        }
+    }
+
+    class WorldScene extends Phaser.Scene {
+        constructor() {
+            super('WorldScene');
+        }
+        create() {
+            // Generate random background
+            this.createRandomBackground();
+
+            this.player = this.physics.add.sprite(100, 100, 'player');
+            this.cursors = this.input.keyboard.createCursorKeys();
+
+            this.encounterCooldown = 0;
+            
+            // Player health
+            this.playerMaxHealth = 100;
+            this.playerHealth = this.playerMaxHealth;
+            this.createHealthBar();
+        }
+        
+        createRandomBackground() {
+            const colors = [0x228B22, 0x32CD32, 0x8FBC8F, 0x90EE90, 0x9ACD32];
+            const baseColor = Phaser.Utils.Array.GetRandom(colors);
+            this.add.rectangle(320, 240, 640, 480, baseColor);
+            
+            // Add random decorative elements
+            for (let i = 0; i < 20; i++) {
+                const x = Phaser.Math.Between(0, 640);
+                const y = Phaser.Math.Between(0, 480);
+                const size = Phaser.Math.Between(5, 15);
+                const decorColor = Phaser.Utils.Array.GetRandom([0x8B4513, 0x654321, 0x556B2F]);
+                this.add.circle(x, y, size, decorColor);
+            }
+        }
+        
+        createHealthBar() {
+            this.healthBarBg = this.add.rectangle(100, 30, 102, 12, 0x000000);
+            this.healthBar = this.add.rectangle(100, 30, 100, 10, 0x00FF00);
+            this.healthText = this.add.text(20, 20, `HP: ${this.playerHealth}/${this.playerMaxHealth}`, {
+                fontSize: '16px',
+                color: '#ffffff'
+            });
+        }
+        
+        updateHealthBar() {
+            const healthPercent = this.playerHealth / this.playerMaxHealth;
+            this.healthBar.width = 100 * healthPercent;
+            this.healthBar.fillColor = healthPercent > 0.5 ? 0x00FF00 : (healthPercent > 0.25 ? 0xFFFF00 : 0xFF0000);
+            this.healthText.setText(`HP: ${this.playerHealth}/${this.playerMaxHealth}`);
+        }
+
+        update(time, delta) {
+            const speed = 100;
+            let isMoving = false;
+            
+            this.player.setVelocity(0);
+            if (this.cursors.left.isDown && this.player.x > 16) {
+                this.player.setVelocityX(-speed);
+                isMoving = true;
+            } else if (this.cursors.right.isDown && this.player.x < 624) {
+                this.player.setVelocityX(speed);
+                isMoving = true;
+            }
+            if (this.cursors.up.isDown && this.player.y > 16) {
+                this.player.setVelocityY(-speed);
+                isMoving = true;
+            } else if (this.cursors.down.isDown && this.player.y < 464) {
+                this.player.setVelocityY(speed);
+                isMoving = true;
+            }
+
+            // Only trigger encounters when moving
+            if (isMoving && this.encounterCooldown <= 0 && Phaser.Math.Between(0, 1000) < 3) {
+                this.encounterCooldown = 2000;
+                this.scene.pause();
+                this.scene.launch('BattleScene');
+            }
+            this.encounterCooldown -= delta;
+        }
+    }
+
+    class BattleScene extends Phaser.Scene {
+        constructor() {
+            super('BattleScene');
+        }
+        create() {
+            const { width, height } = this.scale;
+            
+            // Create forest background
+            this.createForestBackground();
+            
+            // Make sprites bigger
+            this.enemy = this.add.sprite(width - 150, height / 2, 'enemy1');
+            this.enemy.setScale(3);
+            
+            this.player = this.add.sprite(150, height / 2, 'player');
+            this.player.setScale(3);
+
+            // Health system
+            this.playerMaxHealth = 100;
+            this.playerHealth = this.scene.get('WorldScene').playerHealth || this.playerMaxHealth;
+            this.enemyMaxHealth = 60;
+            this.enemyHealth = this.enemyMaxHealth;
+            
+            this.createHealthBars();
+
+            this.question = this.generateQuestion();
+            this.timeLeft = 10000;
+            this.battleEnded = false;
+
+            this.questionText = this.add.text(width / 2, height / 2 - 80, this.question.text, {
+                fontSize: '32px',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+
+            // Create input field manually
+            this.inputText = this.add.text(width / 2, height / 2 - 30, '', {
+                fontSize: '24px',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 2,
+                backgroundColor: '#333333',
+                padding: { x: 10, y: 5 }
+            }).setOrigin(0.5);
+            
+            this.currentInput = '';
+            this.inputText.setText('_');
+            
+            // Handle keyboard input
+            this.input.keyboard.on('keydown', (event) => {
+                if (event.key >= '0' && event.key <= '9') {
+                    this.currentInput += event.key;
+                    this.inputText.setText(this.currentInput + '_');
+                } else if (event.key === 'Backspace') {
+                    this.currentInput = this.currentInput.slice(0, -1);
+                    this.inputText.setText(this.currentInput + '_');
+                } else if (event.key === 'Enter') {
+                    const val = parseInt(this.currentInput);
+                    if (val === this.question.result) {
+                        this.handleCorrectAnswer();
+                    } else {
+                        this.handleWrongAnswer();
+                    }
+                }
+            });
+
+            this.resultText = this.add.text(width / 2, height / 2 + 20, '', {
+                fontSize: '24px',
+                color: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+            
+            // Timer display
+            this.timerText = this.add.text(width / 2, height / 2 + 60, '', {
+                fontSize: '18px',
+                color: '#ff0000',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+            
+            this.updateTimer();
+        }
+        
+        createForestBackground() {
+            const { width, height } = this.scale;
+            
+            // Dark forest background
+            this.add.rectangle(width / 2, height / 2, width, height, 0x1a4a1a);
+            
+            // Trees
+            for (let i = 0; i < 8; i++) {
+                const x = Phaser.Math.Between(50, width - 50);
+                const y = Phaser.Math.Between(100, height - 100);
+                
+                // Tree trunk
+                this.add.rectangle(x, y + 20, 15, 40, 0x654321);
+                
+                // Tree crown
+                this.add.circle(x, y, 25, 0x228B22);
+                this.add.circle(x - 10, y - 5, 20, 0x32CD32);
+                this.add.circle(x + 10, y - 5, 20, 0x32CD32);
+            }
+            
+            // Ground
+            this.add.rectangle(width / 2, height - 20, width, 40, 0x654321);
+        }
+        
+        update(time, delta) {
+            if (!this.battleEnded) {
+                this.timeLeft -= delta;
+                if (this.timeLeft <= 0) {
+                    this.handleWrongAnswer();
+                }
+                this.updateTimer();
+            }
+        }
+        
+        updateTimer() {
+            const seconds = Math.ceil(this.timeLeft / 1000);
+            this.timerText.setText(`Tiempo: ${seconds}s`);
+            
+            if (seconds <= 2) {
+                this.timerText.setColor('#ff0000');
+            } else if (seconds <= 3) {
+                this.timerText.setColor('#ffaa00');
+            } else {
+                this.timerText.setColor('#ffffff');
+            }
+        }
+        
+        createHealthBars() {
+            const { width } = this.scale;
+            
+            // Player health bar
+            this.add.text(20, 10, 'Guerrero', { fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 1 });
+            this.playerHealthBg = this.add.rectangle(100, 30, 102, 12, 0x000000);
+            this.playerHealthBar = this.add.rectangle(100, 30, 100, 10, 0x00FF00);
+            this.playerHealthText = this.add.text(155, 45, '', { fontSize: '12px', color: '#ffffff', stroke: '#000000', strokeThickness: 1 });
+            
+            // Enemy health bar
+            this.add.text(width - 150, 10, 'Bestia', { fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 1 });
+            this.enemyHealthBg = this.add.rectangle(width - 100, 30, 102, 12, 0x000000);
+            this.enemyHealthBar = this.add.rectangle(width - 100, 30, 100, 10, 0xFF0000);
+            this.enemyHealthText = this.add.text(width - 200, 45, '', { fontSize: '12px', color: '#ffffff', stroke: '#000000', strokeThickness: 1 });
+            
+            this.updateHealthBars();
+        }
+        
+        updateHealthBars() {
+            // Player health bar
+            const playerHealthPercent = this.playerHealth / this.playerMaxHealth;
+            this.playerHealthBar.width = 100 * playerHealthPercent;
+            this.playerHealthBar.fillColor = playerHealthPercent > 0.5 ? 0x00FF00 : (playerHealthPercent > 0.25 ? 0xFFFF00 : 0xFF0000);
+            this.playerHealthText.setText(`${this.playerHealth}/${this.playerMaxHealth}`);
+            
+            // Enemy health bar
+            const enemyHealthPercent = this.enemyHealth / this.enemyMaxHealth;
+            this.enemyHealthBar.width = 100 * enemyHealthPercent;
+            this.enemyHealthBar.fillColor = enemyHealthPercent > 0.5 ? 0xFF0000 : (enemyHealthPercent > 0.25 ? 0xFF8800 : 0x880000);
+            this.enemyHealthText.setText(`${this.enemyHealth}/${this.enemyMaxHealth}`);
+        }
+        
+        handleCorrectAnswer() {
+            if (this.battleEnded) return; // Prevent multiple calls
+            this.battleEnded = true; // Stop timer immediately
+            this.resultText.setText('¡Correcto! Atacas a la bestia');
+            this.enemyHealth -= 20;
+            this.updateHealthBars();
+            
+            if (this.enemyHealth <= 0) {
+                this.resultText.setText('¡Victoria! Bestia derrotada');
+                this.time.delayedCall(2000, () => {
+                    this.scene.stop();
+                    this.scene.resume('WorldScene');
+                });
+            } else {
+                this.time.delayedCall(1000, () => {
+                    // Continue battle with new question
+                    this.battleEnded = false; // Resume battle
+                    this.question = this.generateQuestion();
+                    this.questionText.setText(this.question.text);
+                    this.currentInput = '';
+                    this.inputText.setText('_');
+                    this.resultText.setText('');
+                    this.timeLeft = 10000;
+                    this.updateTimer();
+                });
+            }
+        }
+        
+        handleWrongAnswer() {
+            if (this.battleEnded) return; // Prevent multiple calls
+            this.battleEnded = true; // Stop timer immediately
+            this.resultText.setText('¡Fallaste! La bestia te ataca');
+            this.playerHealth -= 15;
+            
+            // Ensure health doesn't go below 0
+            if (this.playerHealth < 0) {
+                this.playerHealth = 0;
+            }
+            
+            this.updateHealthBars();
+            
+            // Update WorldScene player health
+            this.scene.get('WorldScene').playerHealth = this.playerHealth;
+            this.scene.get('WorldScene').updateHealthBar();
+            
+            if (this.playerHealth <= 0) {
+                this.resultText.setText('¡Derrota! Has sido vencido');
+                this.time.delayedCall(2000, () => {
+                    this.scene.stop();
+                    this.scene.start('WorldScene');
+                    this.scene.get('WorldScene').playerHealth = this.playerMaxHealth;
+                    this.scene.get('WorldScene').updateHealthBar();
+                });
+            } else {
+                this.time.delayedCall(1000, () => {
+                    // Continue battle with new question
+                    this.battleEnded = false; // Resume battle
+                    this.question = this.generateQuestion();
+                    this.questionText.setText(this.question.text);
+                    this.currentInput = '';
+                    this.inputText.setText('_');
+                    this.resultText.setText('');
+                    this.timeLeft = 10000;
+                    this.updateTimer();
+                });
+            }
+        }
+
+        generateQuestion() {
+            const a = Phaser.Math.Between(2, 12);
+            const b = Phaser.Math.Between(2, 12);
+            return {
+                text: `${a} × ${b} = ?`,
+                result: a * b
+            };
+        }
+    }
+
+    const config = {
+        type: Phaser.AUTO,
+        width: 640,
+        height: 480,
+        backgroundColor: '#000000',
+        parent: 'game-container',
+        scene: [PreloadScene, IntroScene, WorldScene, BattleScene],
+        physics: {
+            default: 'arcade',
+            arcade: {
+                gravity: { y: 0 },
+                debug: false
+            }
+        },
+        dom: {
+            createContainer: true
+        }
+    };
+
+    const game = new Phaser.Game(config);
+</script>
+</body>
+</html>
