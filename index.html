@@ -35,7 +35,11 @@
         MAZE_HEIGHT: 13,
         MENU_HEIGHT: 60,
         ENCOUNTER_CHANCE: 3, // per 1000
-        ENCOUNTER_COOLDOWN: 2000
+        ENCOUNTER_COOLDOWN: 2000,
+        // Difficulty settings
+        BASE_TIME: 10000, // 10 seconds for first maze
+        MIN_TIME: 4000,   // Minimum 4 seconds
+        TIME_REDUCTION_PER_LEVEL: 1000 // Reduce 1 second per maze after level 2
     };
 
     // Game classes and scenes
@@ -214,33 +218,42 @@
             // Bottom border
             const border = this.add.rectangle(width / 2, menuHeight - 2, width, 4, 0x2F2F2F);
             
-            // Create panels for each stat
-            this.createStatPanel(80, menuHeight / 2, 140, 40, 'HP');
-            this.createStatPanel(260, menuHeight / 2, 140, 40, 'MONSTRUOS');
-            this.createStatPanel(440, menuHeight / 2, 140, 40, 'LABERINTOS');
+            // Create panels for each stat  
+            this.createStatPanel(60, menuHeight / 2, 110, 40, 'HP');
+            this.createStatPanel(180, menuHeight / 2, 110, 40, 'MONSTRUOS');
+            this.createStatPanel(300, menuHeight / 2, 110, 40, 'LABERINTOS');
+            this.createStatPanel(420, menuHeight / 2, 110, 40, 'DIFICULTAD');
             
             // Health bar in first panel
-            this.healthBarBg = this.add.rectangle(80, menuHeight / 2 + 8, 102, 8, 0x000000);
-            this.healthBar = this.add.rectangle(80, menuHeight / 2 + 8, 100, 6, 0x00FF00);
+            this.healthBarBg = this.add.rectangle(60, menuHeight / 2 + 8, 82, 8, 0x000000);
+            this.healthBar = this.add.rectangle(60, menuHeight / 2 + 8, 80, 6, 0x00FF00);
             
             // Text elements (positioned to avoid overlap)
-            this.healthText = this.add.text(80, menuHeight / 2 + 2, `${this.playerHealth}/${this.playerMaxHealth}`, {
-                fontSize: '12px',
+            this.healthText = this.add.text(60, menuHeight / 2 + 2, `${this.playerHealth}/${this.playerMaxHealth}`, {
+                fontSize: '10px',
                 color: '#ffffff',
                 stroke: '#000000',
                 strokeThickness: 1
             }).setOrigin(0.5);
             
-            this.killCountText = this.add.text(260, menuHeight / 2 + 5, `${this.monstersKilled}`, {
-                fontSize: '16px',
+            this.killCountText = this.add.text(180, menuHeight / 2 + 5, `${this.monstersKilled}`, {
+                fontSize: '14px',
                 color: '#ffff00',
                 stroke: '#000000',
                 strokeThickness: 2
             }).setOrigin(0.5);
             
-            this.mazeCountText = this.add.text(440, menuHeight / 2 + 5, `${this.mazesCompleted}`, {
-                fontSize: '16px',
+            this.mazeCountText = this.add.text(300, menuHeight / 2 + 5, `${this.mazesCompleted}`, {
+                fontSize: '14px',
                 color: '#00ffff',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+            
+            // Difficulty text (time remaining)
+            this.difficultyDisplayText = this.add.text(420, menuHeight / 2 + 5, this.getDifficultyText(), {
+                fontSize: '12px',
+                color: '#ff9900',
                 stroke: '#000000',
                 strokeThickness: 2
             }).setOrigin(0.5);
@@ -273,19 +286,25 @@
 
         createMobileControls() {
             const { width, height } = this.scale;
-            const mazeEndY = GAME_CONFIG.MENU_HEIGHT + (this.mazeHeight * this.tileSize); // Menu height + maze height
-            const controlsY = mazeEndY + 40;
-            const buttonSize = 50;
-            const buttonSpacing = 60;
+            const mazeEndY = GAME_CONFIG.MENU_HEIGHT + (this.mazeHeight * this.tileSize);
+            
+            // Detect if mobile device
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
+            
+            // Adjust button size for mobile
+            const buttonSize = isMobile ? 70 : 50;
+            const buttonSpacing = isMobile ? 90 : 60;
+            const controlsHeight = isMobile ? 120 : 80;
+            const controlsY = mazeEndY + (isMobile ? 60 : 40);
             
             // Mobile control background
-            this.mobileControlsBg = this.add.rectangle(width / 2, controlsY, width, 80, 0x2F2F2F, 0.8);
+            this.mobileControlsBg = this.add.rectangle(width / 2, controlsY, width, controlsHeight, 0x2F2F2F, 0.8);
             
-            // Virtual directional buttons
-            this.createDirectionalButton(width / 2, controlsY - 20, '↑', 'up');
-            this.createDirectionalButton(width / 2 - buttonSpacing, controlsY + 20, '←', 'left');
-            this.createDirectionalButton(width / 2 + buttonSpacing, controlsY + 20, '→', 'right');
-            this.createDirectionalButton(width / 2, controlsY + 20, '↓', 'down');
+            // Virtual directional buttons with better mobile spacing
+            this.createDirectionalButton(width / 2, controlsY - (isMobile ? 40 : 30), '↑', 'up', buttonSize);
+            this.createDirectionalButton(width / 2 - buttonSpacing, controlsY + (isMobile ? 10 : 5), '←', 'left', buttonSize);
+            this.createDirectionalButton(width / 2 + buttonSpacing, controlsY + (isMobile ? 10 : 5), '→', 'right', buttonSize);
+            this.createDirectionalButton(width / 2, controlsY + (isMobile ? 60 : 40), '↓', 'down', buttonSize);
             
             // Virtual cursor state
             this.virtualCursors = {
@@ -296,36 +315,49 @@
             };
         }
 
-        createDirectionalButton(x, y, text, direction) {
-            const buttonSize = 45;
+        createDirectionalButton(x, y, text, direction, size = 45) {
+            // Detect if mobile for larger buttons
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
+            const fontSize = isMobile ? '32px' : '24px';
             
-            // Button background
-            const button = this.add.rectangle(x, y, buttonSize, buttonSize, 0x654321);
-            button.setStrokeStyle(2, 0x8B4513);
+            // Button background with 3D effect
+            const button = this.add.rectangle(x, y, size, size, 0x654321);
+            button.setStrokeStyle(3, 0x8B4513);
             button.setInteractive();
+            
+            // Add button depth/shadow
+            const shadow = this.add.rectangle(x + 2, y + 2, size, size, 0x2F2F2F, 0.6);
+            shadow.setDepth(-1);
             
             // Button text
             const buttonText = this.add.text(x, y, text, {
-                fontSize: '24px',
+                fontSize: fontSize,
                 color: '#ffffff',
                 stroke: '#000000',
-                strokeThickness: 2
+                strokeThickness: 3,
+                fontStyle: 'bold'
             }).setOrigin(0.5);
 
-            // Button interactions
+            // Button interactions with better feedback
             button.on('pointerdown', () => {
                 this.virtualCursors[direction].isDown = true;
                 button.setFillStyle(0x8B4513); // Pressed state
+                button.setScale(0.95); // Press effect
+                buttonText.setScale(0.95);
             });
 
             button.on('pointerup', () => {
                 this.virtualCursors[direction].isDown = false;
                 button.setFillStyle(0x654321); // Normal state
+                button.setScale(1);
+                buttonText.setScale(1);
             });
 
             button.on('pointerout', () => {
                 this.virtualCursors[direction].isDown = false;
                 button.setFillStyle(0x654321); // Normal state
+                button.setScale(1);
+                buttonText.setScale(1);
             });
         }
 
@@ -336,7 +368,7 @@
             // Toggle all mobile control elements
             const mazeEndY = GAME_CONFIG.MENU_HEIGHT + (this.mazeHeight * this.tileSize);
             this.children.list.forEach(child => {
-                if (child.y > mazeEndY) { // Controls are below maze
+                if (child.y > mazeEndY && child.y < this.scale.height - 50) { // Controls are below maze but above bottom
                     child.setVisible(visible);
                 }
             });
@@ -419,11 +451,35 @@
 
         updateUI() {
             const healthPercent = this.playerHealth / this.playerMaxHealth;
-            this.healthBar.width = 100 * healthPercent;
+            this.healthBar.width = 80 * healthPercent;
             this.healthBar.fillColor = healthPercent > 0.5 ? 0x00FF00 : (healthPercent > 0.25 ? 0xFFFF00 : 0xFF0000);
             this.healthText.setText(`${this.playerHealth}/${this.playerMaxHealth}`);
             this.killCountText.setText(`${this.monstersKilled}`);
             this.mazeCountText.setText(`${this.mazesCompleted}`);
+            
+            // Update difficulty display
+            if (this.difficultyDisplayText) {
+                this.difficultyDisplayText.setText(this.getDifficultyText());
+            }
+        }
+        
+        getDifficultyText() {
+            const currentLevel = this.mazesCompleted + 1;
+            let timeLimit;
+            
+            if (currentLevel === 1) {
+                timeLimit = 10;
+            } else if (currentLevel === 2) {
+                timeLimit = 8;
+            } else if (currentLevel === 3) {
+                timeLimit = 6;
+            } else {
+                const reductionFromLevel4 = (currentLevel - 3);
+                timeLimit = 6 - reductionFromLevel4;
+                timeLimit = Math.max(timeLimit, 4); // Minimum 4 seconds
+            }
+            
+            return `${timeLimit}s`;
         }
 
         update(time, delta) {
@@ -705,6 +761,7 @@
         
         create() {
             const { width, height } = this.scale;
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
             
             // Create mystical battle arena
             this.createBattleArena();
@@ -714,7 +771,7 @@
             const randomEnemyType = Phaser.Utils.Array.GetRandom(enemyTypes);
             
             // Make sprites bigger (positioned in main game area)
-            const gameAreaHeight = 480; // Original game area height
+            const gameAreaHeight = isMobile ? 520 : 480; // More space for mobile
             this.enemy = this.add.sprite(width - 150, gameAreaHeight / 2, randomEnemyType);
             this.enemy.setScale(3);
             this.enemy.enemyType = randomEnemyType; // Store for animations
@@ -738,19 +795,23 @@
             this.createHealthBars();
 
             this.question = this.generateQuestion();
-            this.timeLeft = 10000;
+            this.timeLeft = this.calculateTimeLimit();
             this.battleEnded = false;
 
-            this.questionText = this.add.text(width / 2, gameAreaHeight / 2 - 80, this.question.text, {
-                fontSize: '32px',
+            // Adjust text positions for mobile
+            const questionY = isMobile ? gameAreaHeight / 2 - 100 : gameAreaHeight / 2 - 80;
+            const inputY = isMobile ? gameAreaHeight / 2 - 50 : gameAreaHeight / 2 - 30;
+            
+            this.questionText = this.add.text(width / 2, questionY, this.question.text, {
+                fontSize: isMobile ? '28px' : '32px',
                 color: '#ffffff',
                 stroke: '#000000',
                 strokeThickness: 2
             }).setOrigin(0.5);
 
             // Create input field manually
-            this.inputText = this.add.text(width / 2, gameAreaHeight / 2 - 30, '', {
-                fontSize: '24px',
+            this.inputText = this.add.text(width / 2, inputY, '', {
+                fontSize: isMobile ? '22px' : '24px',
                 color: '#ffffff',
                 stroke: '#000000',
                 strokeThickness: 2,
@@ -760,6 +821,19 @@
             
             this.currentInput = '';
             this.inputText.setText('_');
+            
+            // Show difficulty level and time limit
+            const worldScene = this.scene.get('WorldScene');
+            const currentLevel = worldScene ? worldScene.mazesCompleted + 1 : 1;
+            const timeInSeconds = Math.ceil(this.timeLeft / 1000);
+            
+            this.difficultyText = this.add.text(width / 2, 20, `Nivel ${currentLevel} - Tiempo: ${timeInSeconds}s`, {
+                fontSize: isMobile ? '16px' : '18px',
+                color: '#FFD700',
+                stroke: '#000000',
+                strokeThickness: 2,
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
             
             // Handle keyboard input
             this.input.keyboard.on('keydown', (event) => {
@@ -775,16 +849,19 @@
             // Create mobile numeric keypad
             this.createNumericKeypad();
 
-            this.resultText = this.add.text(width / 2, gameAreaHeight / 2 + 20, '', {
-                fontSize: '24px',
+            const resultY = isMobile ? gameAreaHeight / 2 : gameAreaHeight / 2 + 20;
+            const timerY = isMobile ? gameAreaHeight / 2 + 40 : gameAreaHeight / 2 + 60;
+            
+            this.resultText = this.add.text(width / 2, resultY, '', {
+                fontSize: isMobile ? '20px' : '24px',
                 color: '#ffff00',
                 stroke: '#000000',
                 strokeThickness: 2
             }).setOrigin(0.5);
             
             // Timer display
-            this.timerText = this.add.text(width / 2, gameAreaHeight / 2 + 60, '', {
-                fontSize: '18px',
+            this.timerText = this.add.text(width / 2, timerY, '', {
+                fontSize: isMobile ? '16px' : '18px',
                 color: '#ff0000',
                 stroke: '#000000',
                 strokeThickness: 2
@@ -796,13 +873,19 @@
         createNumericKeypad() {
             const { width, height } = this.scale;
             const gameAreaHeight = 480;
-            const keypadHeight = 160;
-            const keypadStartY = gameAreaHeight + 20;
-            const buttonSize = 35;
-            const spacing = 45;
+            // Detect mobile device
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
+            
+            // Adjust sizes for mobile
+            const keypadHeight = isMobile ? 220 : 160;
+            const keypadStartY = gameAreaHeight + (isMobile ? 30 : 20);
+            const buttonSize = isMobile ? 55 : 35;
+            const spacing = isMobile ? 70 : 45;
+            const rowSpacing = isMobile ? 60 : 40;
             
             // Keypad background
-            this.add.rectangle(width / 2, gameAreaHeight + keypadHeight / 2, width, keypadHeight, 0x2F2F2F, 0.9);
+            const keypadY = gameAreaHeight + keypadHeight / 2;
+            this.add.rectangle(width / 2, keypadY, width, keypadHeight, 0x2F2F2F, 0.9);
             
             // Number buttons (1-9)
             const numbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
@@ -810,19 +893,22 @@
                 const row = Math.floor(i / 3);
                 const col = i % 3;
                 const x = width / 2 - spacing + (col * spacing);
-                const y = keypadStartY + (row * 40);
+                const y = keypadStartY + (row * rowSpacing);
                 
                 this.createNumberButton(x, y, numbers[i], buttonSize);
             }
             
+            // Bottom row with larger spacing
+            const bottomY = keypadStartY + (3 * rowSpacing);
+            
             // Zero button
-            this.createNumberButton(width / 2 - spacing, keypadStartY + 120, '0', buttonSize);
+            this.createNumberButton(width / 2 - spacing, bottomY, '0', buttonSize);
             
             // Backspace button
-            this.createNumberButton(width / 2, keypadStartY + 120, '⌫', buttonSize, true);
+            this.createNumberButton(width / 2, bottomY, '⌫', buttonSize, true);
             
             // OK button
-            this.createNumberButton(width / 2 + spacing, keypadStartY + 120, 'OK', buttonSize, false, true);
+            this.createNumberButton(width / 2 + spacing, bottomY, 'OK', buttonSize, false, true);
         }
 
         createNumberButton(x, y, text, size, isBackspace = false, isOK = false) {
@@ -832,20 +918,37 @@
             else if (isBackspace) buttonColor = 0x8B4513;
             
             const button = this.add.rectangle(x, y, size, size, buttonColor);
-            button.setStrokeStyle(2, 0x8B4513);
+            button.setStrokeStyle(3, 0x8B4513);
             button.setInteractive();
             
-            // Button text
-            this.add.text(x, y, text, {
-                fontSize: isOK ? '14px' : '20px',
+            // Add button depth
+            const shadow = this.add.rectangle(x + 2, y + 2, size, size, 0x2F2F2F, 0.6);
+            shadow.setDepth(-1);
+            
+            // Detect mobile for larger text
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
+            
+            // Button text with mobile scaling
+            let fontSize;
+            if (isMobile) {
+                fontSize = isOK ? '20px' : '28px';
+            } else {
+                fontSize = isOK ? '14px' : '20px';
+            }
+            
+            const buttonText = this.add.text(x, y, text, {
+                fontSize: fontSize,
                 color: '#ffffff',
                 stroke: '#000000',
-                strokeThickness: 2
+                strokeThickness: 3,
+                fontStyle: 'bold'
             }).setOrigin(0.5);
 
             // Button interactions
             button.on('pointerdown', () => {
-                button.setFillStyle(buttonColor + 0x222222); // Pressed state
+                button.setFillStyle(buttonColor + 0x333333); // Pressed state
+                button.setScale(0.9); // Press effect
+                buttonText.setScale(0.9);
                 
                 if (isBackspace) {
                     this.removeDigit();
@@ -858,10 +961,14 @@
 
             button.on('pointerup', () => {
                 button.setFillStyle(buttonColor); // Normal state
+                button.setScale(1);
+                buttonText.setScale(1);
             });
 
             button.on('pointerout', () => {
                 button.setFillStyle(buttonColor); // Normal state
+                button.setScale(1);
+                buttonText.setScale(1);
             });
         }
 
@@ -888,6 +995,8 @@
         
         createBattleArena() {
             const { width, height } = this.scale;
+            const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
+            const gameAreaHeight = isMobile ? 520 : 480;
             
             // Subtle background variations with dungeon tones
             const baseColors = [0x2F2F2F, 0x3A3A3A, 0x454545];
@@ -896,8 +1005,8 @@
             const bgColor = Phaser.Utils.Array.GetRandom(baseColors);
             const floorColor = Phaser.Utils.Array.GetRandom(floorColors);
             
-            // Dark stone background
-            this.add.rectangle(width / 2, height / 2, width, height, bgColor);
+            // Dark stone background (only for game area, not keypad area)
+            this.add.rectangle(width / 2, gameAreaHeight / 2, width, gameAreaHeight, bgColor);
             
             // Create subtle brick pattern on walls (avoiding center area)
             const brickWidth = 24;
@@ -921,7 +1030,7 @@
                 for (let x = 0; x < Math.ceil(width / brickWidth); x++) {
                     const offsetX = (y % 2) * (brickWidth / 2);
                     const brickX = x * brickWidth + offsetX;
-                    const brickY = height - 100 + y * brickHeight;
+                    const brickY = gameAreaHeight - 100 + y * brickHeight;
                     
                     if (brickX < width) {
                         this.add.rectangle(brickX + brickWidth/2, brickY + brickHeight/2, brickWidth - 2, brickHeight - 1, 0x4A4A4A, 0.6);
@@ -930,7 +1039,7 @@
             }
             
             // Side area bricks (avoiding center)
-            for (let y = 3; y < Math.ceil((height - 100) / brickHeight) - 2; y++) {
+            for (let y = 3; y < Math.ceil((gameAreaHeight - 100) / brickHeight) - 2; y++) {
                 // Left side
                 for (let x = 0; x < 3; x++) {
                     const offsetX = (y % 2) * (brickWidth / 2);
@@ -955,12 +1064,12 @@
             }
             
             // Stone floor
-            this.add.rectangle(width / 2, height - 40, width, 80, floorColor);
+            this.add.rectangle(width / 2, gameAreaHeight - 40, width, 80, floorColor);
             
             // Simple stone pattern on floor
             for (let i = 0; i < 8; i++) {
                 const stoneX = Phaser.Math.Between(50, width - 50);
-                const stoneY = Phaser.Math.Between(height - 70, height - 20);
+                const stoneY = Phaser.Math.Between(gameAreaHeight - 70, gameAreaHeight - 20);
                 const stoneSize = Phaser.Math.Between(3, 6);
                 this.add.circle(stoneX, stoneY, stoneSize, 0x555555, 0.4);
             }
@@ -1042,7 +1151,7 @@
                     this.currentInput = '';
                     this.inputText.setText('_');
                     this.resultText.setText('');
-                    this.timeLeft = 10000;
+                    this.timeLeft = this.calculateTimeLimit();
                     this.updateTimer();
                 });
             }
@@ -1084,7 +1193,7 @@
                     this.currentInput = '';
                     this.inputText.setText('_');
                     this.resultText.setText('');
-                    this.timeLeft = 10000;
+                    this.timeLeft = this.calculateTimeLimit();
                     this.updateTimer();
                 });
             }
@@ -1104,6 +1213,14 @@
             const seconds = Math.ceil(this.timeLeft / 1000);
             this.timerText.setText(`Tiempo: ${seconds}s`);
             
+            // Update difficulty text with current time
+            if (this.difficultyText) {
+                const worldScene = this.scene.get('WorldScene');
+                const currentLevel = worldScene ? worldScene.mazesCompleted + 1 : 1;
+                const maxTime = Math.ceil(this.calculateTimeLimit() / 1000);
+                this.difficultyText.setText(`Nivel ${currentLevel} - Tiempo máximo: ${maxTime}s`);
+            }
+            
             if (seconds <= 2) {
                 this.timerText.setColor('#ff0000');
             } else if (seconds <= 3) {
@@ -1120,6 +1237,34 @@
                 text: `${a} × ${b} = ?`,
                 result: a * b
             };
+        }
+        
+        calculateTimeLimit() {
+            // Get current maze level from WorldScene
+            const worldScene = this.scene.get('WorldScene');
+            const currentLevel = worldScene ? worldScene.mazesCompleted + 1 : 1;
+            
+            let timeLimit;
+            
+            if (currentLevel === 1) {
+                // Level 1: 10 seconds
+                timeLimit = GAME_CONFIG.BASE_TIME;
+            } else if (currentLevel === 2) {
+                // Level 2: 8 seconds
+                timeLimit = GAME_CONFIG.BASE_TIME - 2000;
+            } else if (currentLevel === 3) {
+                // Level 3: 6 seconds
+                timeLimit = GAME_CONFIG.BASE_TIME - 4000;
+            } else {
+                // Level 4+: Reduce 1 second per level, minimum 4 seconds
+                const reductionFromLevel4 = (currentLevel - 3) * GAME_CONFIG.TIME_REDUCTION_PER_LEVEL;
+                timeLimit = GAME_CONFIG.BASE_TIME - 4000 - reductionFromLevel4;
+                
+                // Ensure minimum time
+                timeLimit = Math.max(timeLimit, GAME_CONFIG.MIN_TIME);
+            }
+            
+            return timeLimit;
         }
         
         createEnemyAnimations() {
@@ -1178,10 +1323,14 @@
         }
     }
 
+    // Detect mobile device and adjust game height
+    const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
+    const gameHeight = isMobile ? 800 : 640; // Extra height for mobile keyboards
+    
     const config = {
         type: Phaser.AUTO,
         width: 640,
-        height: 640, // Increased height to accommodate mobile controls
+        height: gameHeight,
         backgroundColor: '#000000',
         parent: 'game-container',
         scene: [PreloadScene, IntroScene, WorldScene, BattleScene],
