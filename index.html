@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
   <title>Guerrero vs Bestias - Laberintos</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
   <style>
@@ -10,10 +10,14 @@
           margin: 0;
           padding: 0;
           background: #000;
+          overflow: hidden;
       }
       canvas {
           display: block;
           margin: 0 auto;
+          max-width: 100vw;
+          max-height: 100vh;
+          object-fit: contain;
       }
   </style>
 </head>
