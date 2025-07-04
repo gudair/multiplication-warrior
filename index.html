@@ -65,21 +65,106 @@
             // Player health
             this.playerMaxHealth = 100;
             this.playerHealth = this.playerMaxHealth;
+            this.monstersKilled = 0;
             this.createHealthBar();
         }
         
         createRandomBackground() {
-            const colors = [0x228B22, 0x32CD32, 0x8FBC8F, 0x90EE90, 0x9ACD32];
-            const baseColor = Phaser.Utils.Array.GetRandom(colors);
-            this.add.rectangle(320, 240, 640, 480, baseColor);
+            const { width, height } = this.scale;
             
-            // Add random decorative elements
-            for (let i = 0; i < 20; i++) {
-                const x = Phaser.Math.Between(0, 640);
-                const y = Phaser.Math.Between(0, 480);
-                const size = Phaser.Math.Between(5, 15);
-                const decorColor = Phaser.Utils.Array.GetRandom([0x8B4513, 0x654321, 0x556B2F]);
-                this.add.circle(x, y, size, decorColor);
+            // Sky gradient (top to bottom)
+            const skyTop = Phaser.Utils.Array.GetRandom([0x87CEEB, 0x4682B4, 0x6495ED]);
+            const skyBottom = Phaser.Utils.Array.GetRandom([0xFFE4B5, 0xF0E68C, 0xDDA0DD]);
+            
+            // Create sky layers
+            this.add.rectangle(width / 2, height * 0.3, width, height * 0.6, skyTop);
+            this.add.rectangle(width / 2, height * 0.7, width, height * 0.6, skyBottom);
+            
+            // Ground - main walking surface
+            this.add.rectangle(width / 2, height - 30, width, 60, 0x228B22); // Grass layer
+            this.add.rectangle(width / 2, height - 10, width, 20, 0x654321); // Dirt edge
+            
+            // Mountains in background
+            for (let i = 0; i < 5; i++) {
+                const x = Phaser.Math.Between(-50, width + 50);
+                const mountainHeight = Phaser.Math.Between(80, 150);
+                const mountainWidth = Phaser.Math.Between(100, 200);
+                this.add.triangle(x, height * 0.7, 0, mountainHeight, mountainWidth / 2, 0, mountainWidth, mountainHeight, 0x696969);
+            }
+            
+            // Medieval castle in distance
+            if (Phaser.Math.Between(0, 100) < 30) {
+                const castleX = Phaser.Math.Between(100, width - 100);
+                // Castle walls
+                this.add.rectangle(castleX, height * 0.6, 80, 60, 0x708090);
+                // Castle towers
+                this.add.rectangle(castleX - 30, height * 0.55, 20, 70, 0x708090);
+                this.add.rectangle(castleX + 30, height * 0.55, 20, 70, 0x708090);
+                // Flags
+                this.add.rectangle(castleX - 30, height * 0.45, 8, 15, 0xFF0000);
+                this.add.rectangle(castleX + 30, height * 0.45, 8, 15, 0x0000FF);
+            }
+            
+            // Background trees (smaller, in distance)
+            for (let i = 0; i < Phaser.Math.Between(5, 8); i++) {
+                const treeX = Phaser.Math.Between(50, width - 50);
+                const treeY = Phaser.Math.Between(height * 0.5, height * 0.7);
+                const treeSize = Phaser.Math.Between(0.5, 0.8);
+                
+                // Tree trunk
+                this.add.rectangle(treeX, treeY + 15 * treeSize, 6 * treeSize, 20 * treeSize, 0x654321);
+                
+                // Tree foliage
+                const foliageColor = Phaser.Utils.Array.GetRandom([0x228B22, 0x32CD32, 0x006400]);
+                this.add.circle(treeX, treeY, 15 * treeSize, foliageColor);
+            }
+            
+            // Foreground trees (larger, closer)
+            for (let i = 0; i < Phaser.Math.Between(3, 6); i++) {
+                const treeX = Phaser.Math.Between(50, width - 50);
+                const treeY = height - 80;
+                const treeSize = Phaser.Math.Between(1.2, 1.8);
+                
+                // Tree trunk
+                this.add.rectangle(treeX, treeY + 20 * treeSize, 10 * treeSize, 30 * treeSize, 0x654321);
+                
+                // Tree foliage
+                const foliageColor = Phaser.Utils.Array.GetRandom([0x228B22, 0x32CD32, 0x006400]);
+                this.add.circle(treeX, treeY, 25 * treeSize, foliageColor);
+                this.add.circle(treeX - 10 * treeSize, treeY - 8 * treeSize, 18 * treeSize, foliageColor);
+                this.add.circle(treeX + 10 * treeSize, treeY - 8 * treeSize, 18 * treeSize, foliageColor);
+            }
+            
+            // Medieval village houses (in background)
+            for (let i = 0; i < Phaser.Math.Between(1, 3); i++) {
+                const houseX = Phaser.Math.Between(100, width - 100);
+                const houseY = height * 0.65;
+                
+                // House base (smaller for distance)
+                this.add.rectangle(houseX, houseY, 30, 25, 0xD2B48C);
+                // Roof
+                this.add.triangle(houseX, houseY - 12, 0, -20, -20, 8, 20, 8, 0x8B4513);
+                // Door
+                this.add.rectangle(houseX, houseY + 8, 6, 12, 0x654321);
+                // Window
+                this.add.rectangle(houseX - 8, houseY - 3, 4, 4, 0xFFFF00);
+            }
+            
+            // Stone path on ground level
+            for (let i = 0; i < 15; i++) {
+                const stoneX = Phaser.Math.Between(0, width);
+                const stoneY = Phaser.Math.Between(height - 50, height - 20);
+                const stoneSize = Phaser.Math.Between(3, 6);
+                this.add.circle(stoneX, stoneY, stoneSize, 0x696969);
+            }
+            
+            // Clouds
+            for (let i = 0; i < Phaser.Math.Between(3, 6); i++) {
+                const cloudX = Phaser.Math.Between(50, width - 50);
+                const cloudY = Phaser.Math.Between(50, height * 0.4);
+                this.add.circle(cloudX, cloudY, 15, 0xFFFFFF);
+                this.add.circle(cloudX + 10, cloudY, 12, 0xFFFFFF);
+                this.add.circle(cloudX - 10, cloudY, 12, 0xFFFFFF);
             }
         }
         
@@ -90,6 +175,12 @@
                 fontSize: '16px',
                 color: '#ffffff'
             });
+            this.killCountText = this.add.text(20, 50, `Monstruos: ${this.monstersKilled}`, {
+                fontSize: '16px',
+                color: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 1
+            });
         }
         
         updateHealthBar() {
@@ -97,6 +188,7 @@
             this.healthBar.width = 100 * healthPercent;
             this.healthBar.fillColor = healthPercent > 0.5 ? 0x00FF00 : (healthPercent > 0.25 ? 0xFFFF00 : 0xFF0000);
             this.healthText.setText(`HP: ${this.playerHealth}/${this.playerMaxHealth}`);
+            this.killCountText.setText(`Monstruos: ${this.monstersKilled}`);
         }
 
         update(time, delta) {
@@ -301,7 +393,16 @@
             this.updateHealthBars();
             
             if (this.enemyHealth <= 0) {
-                this.resultText.setText('¡Victoria! Bestia derrotada');
+                // Increase kill counter and heal player
+                const worldScene = this.scene.get('WorldScene');
+                worldScene.monstersKilled += 1;
+                worldScene.playerHealth += 5;
+                if (worldScene.playerHealth > worldScene.playerMaxHealth) {
+                    worldScene.playerHealth = worldScene.playerMaxHealth;
+                }
+                worldScene.updateHealthBar();
+                
+                this.resultText.setText('¡Victoria! Bestia derrotada (+5 HP)');
                 this.time.delayedCall(2000, () => {
                     this.scene.stop();
                     this.scene.resume('WorldScene');
@@ -324,7 +425,7 @@
         handleWrongAnswer() {
             if (this.battleEnded) return; // Prevent multiple calls
             this.battleEnded = true; // Stop timer immediately
-            this.resultText.setText('¡Fallaste! La bestia te ataca');
+            this.resultText.setText(`¡Fallaste! La respuesta era ${this.question.result}`);
             this.playerHealth -= 15;
             
             // Ensure health doesn't go below 0
@@ -347,8 +448,8 @@
                     this.scene.get('WorldScene').updateHealthBar();
                 });
             } else {
-                this.time.delayedCall(1000, () => {
-                    // Continue battle with new question
+                this.time.delayedCall(2000, () => {
+                    // Continue battle with new question after showing answer
                     this.battleEnded = false; // Resume battle
                     this.question = this.generateQuestion();
                     this.questionText.setText(this.question.text);
