@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Guerrero vs Bestias</title>
+  <title>Guerrero vs Bestias - Laberintos</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
   <style>
       body {
@@ -18,7 +18,393 @@
   </style>
 </head>
 <body>
+
+<!-- Load separate JavaScript files -->
+<script src="js/MazeGenerator.js"></script>
+
 <script>
+    // Include WorldScene directly for now to avoid loading issues
+    class WorldScene extends Phaser.Scene {
+        constructor() {
+            super('WorldScene');
+        }
+
+        create() {
+            // Initialize game state
+            this.playerMaxHealth = 100;
+            this.playerHealth = this.playerMaxHealth;
+            this.monstersKilled = 0;
+            this.mazesCompleted = 0;
+            this.encounterCooldown = 0;
+
+            // Maze properties
+            this.tileSize = 32;
+            this.mazeWidth = 20;
+            this.mazeHeight = 13; // Reduced to fit in viewport with menu
+            
+            // Initialize maze elements array
+            this.mazeElements = [];
+
+            // Generate first maze
+            this.generateNewMaze();
+            
+            // Create UI and controls after maze
+            this.createUI();
+            this.setupControls();
+        }
+
+        generateNewMaze() {
+            const generator = new MazeGenerator(this.mazeWidth, this.mazeHeight);
+            this.maze = generator.generate();
+            this.createDungeonBackground();
+            this.createPlayer();
+        }
+
+        clearMazeElements() {
+            // Remove previous player
+            if (this.player) {
+                this.player.destroy();
+                this.player = null;
+            }
+            
+            // Remove previous walls
+            if (this.walls) {
+                this.walls.destroy();
+                this.walls = null;
+            }
+            
+            // Remove previous maze elements (background, floors, walls, entrance, exit)
+            if (this.mazeElements && this.mazeElements.length > 0) {
+                this.mazeElements.forEach(element => {
+                    if (element && element.destroy && !element.destroyed) {
+                        element.destroy();
+                    }
+                });
+                this.mazeElements = [];
+            }
+        }
+
+        createDungeonBackground() {
+            const { width, height } = this.scale;
+
+            // Very dark dungeon background
+            const background = this.add.rectangle(width / 2, height / 2, width, height, 0x1A1A1A);
+            this.mazeElements.push(background);
+
+            // Create walls group for collision
+            this.walls = this.physics.add.staticGroup();
+
+            // Draw maze (offset by menu height)
+            const menuOffset = 60;
+            for (let y = 0; y < this.mazeHeight; y++) {
+                for (let x = 0; x < this.mazeWidth; x++) {
+                    const pixelX = x * this.tileSize;
+                    const pixelY = y * this.tileSize + menuOffset;
+
+                    if (this.maze[y][x] === 1) {
+                        // Wall tile - smaller collision box for better movement
+                        const wall = this.add.rectangle(
+                            pixelX + this.tileSize/2, 
+                            pixelY + this.tileSize/2, 
+                            this.tileSize, 
+                            this.tileSize, 
+                            0x654321
+                        );
+                        wall.setStrokeStyle(2, 0x8B4513);
+                        this.mazeElements.push(wall);
+                        
+                        // Create a smaller physics body for better collision
+                        const wallBody = this.physics.add.existing(wall, true);
+                        wallBody.body.setSize(this.tileSize - 4, this.tileSize - 4);
+                        this.walls.add(wallBody);
+                    } else {
+                        // Floor tile
+                        const floor = this.add.rectangle(
+                            pixelX + this.tileSize/2, 
+                            pixelY + this.tileSize/2, 
+                            this.tileSize, 
+                            this.tileSize, 
+                            0x8B7355
+                        );
+                        this.mazeElements.push(floor);
+                    }
+                }
+            }
+
+            // Add entrance marker (green)
+            const entrance = this.add.rectangle(this.tileSize/2, this.tileSize + this.tileSize/2 + menuOffset, this.tileSize, this.tileSize, 0x00FF00);
+            this.mazeElements.push(entrance);
+
+            // Add exit marker (red)
+            const exitX = (this.mazeWidth - 1) * this.tileSize + this.tileSize/2;
+            const exitY = (this.mazeHeight - 2) * this.tileSize + this.tileSize/2 + menuOffset;
+            this.exitZone = this.add.rectangle(exitX, exitY, this.tileSize, this.tileSize, 0xFF0000);
+            this.mazeElements.push(this.exitZone);
+        }
+
+        createPlayer() {
+            // Place player at entrance (offset by menu height)
+            const menuOffset = 60;
+            this.player = this.physics.add.sprite(this.tileSize/2, this.tileSize + this.tileSize/2 + menuOffset, 'player');
+            this.player.setCollideWorldBounds(true);
+            
+            // Make player collision box smaller for smoother movement
+            this.player.body.setSize(this.tileSize - 8, this.tileSize - 8);
+            this.player.body.setOffset(4, 4);
+
+            // Add collision between player and walls
+            this.physics.add.collider(this.player, this.walls);
+        }
+
+        createUI() {
+            this.createTopMenu();
+            this.updateUI();
+        }
+
+        createTopMenu() {
+            const { width } = this.scale;
+            const menuHeight = 60;
+            
+            // Retro brick-style background
+            const menuBg = this.add.rectangle(width / 2, menuHeight / 2, width, menuHeight, 0x8B4513);
+            
+            // Brick pattern for retro look
+            const brickWidth = 32;
+            const brickHeight = 16;
+            
+            for (let y = 0; y < Math.ceil(menuHeight / brickHeight); y++) {
+                for (let x = 0; x < Math.ceil(width / brickWidth); x++) {
+                    const offsetX = (y % 2) * (brickWidth / 2);
+                    const brickX = x * brickWidth + offsetX;
+                    const brickY = y * brickHeight;
+                    
+                    if (brickX < width && brickY < menuHeight) {
+                        // Brick with subtle variation
+                        const brickColor = Phaser.Utils.Array.GetRandom([0xA0522D, 0x8B4513, 0x654321]);
+                        const brick = this.add.rectangle(brickX + brickWidth/2, brickY + brickHeight/2, brickWidth - 2, brickHeight - 1, brickColor);
+                        
+                        // Mortar lines
+                        const mortarH = this.add.rectangle(brickX + brickWidth/2, brickY + brickHeight/2, brickWidth - 2, 1, 0x2F2F2F);
+                        const mortarV = this.add.rectangle(brickX + brickWidth/2, brickY + brickHeight/2, 1, brickHeight - 1, 0x2F2F2F);
+                    }
+                }
+            }
+            
+            // Bottom border
+            const border = this.add.rectangle(width / 2, menuHeight - 2, width, 4, 0x2F2F2F);
+            
+            // Create panels for each stat
+            this.createStatPanel(80, menuHeight / 2, 140, 40, 'HP');
+            this.createStatPanel(260, menuHeight / 2, 140, 40, 'MONSTRUOS');
+            this.createStatPanel(440, menuHeight / 2, 140, 40, 'LABERINTOS');
+            
+            // Health bar in first panel
+            this.healthBarBg = this.add.rectangle(80, menuHeight / 2 + 8, 102, 8, 0x000000);
+            this.healthBar = this.add.rectangle(80, menuHeight / 2 + 8, 100, 6, 0x00FF00);
+            
+            // Text elements (positioned to avoid overlap)
+            this.healthText = this.add.text(80, menuHeight / 2 + 2, `${this.playerHealth}/${this.playerMaxHealth}`, {
+                fontSize: '12px',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 1
+            }).setOrigin(0.5);
+            
+            this.killCountText = this.add.text(260, menuHeight / 2 + 5, `${this.monstersKilled}`, {
+                fontSize: '16px',
+                color: '#ffff00',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+            
+            this.mazeCountText = this.add.text(440, menuHeight / 2 + 5, `${this.mazesCompleted}`, {
+                fontSize: '16px',
+                color: '#00ffff',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+        }
+        
+        createStatPanel(x, y, width, height, label) {
+            // Panel background
+            const panelBg = this.add.rectangle(x, y, width, height, 0x654321, 0.8);
+            const panelInner = this.add.rectangle(x, y, width - 4, height - 4, 0x2F2F2F, 0.6);
+            
+            // Panel border (retro 3D effect)
+            const topHighlight = this.add.rectangle(x, y - height/2 + 1, width, 2, 0xD2B48C);
+            const leftHighlight = this.add.rectangle(x - width/2 + 1, y, 2, height, 0xD2B48C);
+            const bottomShadow = this.add.rectangle(x, y + height/2 - 1, width, 2, 0x1F1F1F);
+            const rightShadow = this.add.rectangle(x + width/2 - 1, y, 2, height, 0x1F1F1F);
+            
+            // Label (positioned higher to avoid overlap)
+            const labelText = this.add.text(x, y - 12, label, {
+                fontSize: '9px',
+                color: '#D2B48C',
+                stroke: '#000000',
+                strokeThickness: 1
+            }).setOrigin(0.5);
+        }
+
+        setupControls() {
+            this.cursors = this.input.keyboard.createCursorKeys();
+            this.createMobileControls();
+        }
+
+        createMobileControls() {
+            const { width, height } = this.scale;
+            const mazeEndY = 60 + (this.mazeHeight * this.tileSize); // Menu height + maze height
+            const controlsY = mazeEndY + 40;
+            const buttonSize = 50;
+            const buttonSpacing = 60;
+            
+            // Mobile control background
+            this.mobileControlsBg = this.add.rectangle(width / 2, controlsY, width, 80, 0x2F2F2F, 0.8);
+            
+            // Virtual directional buttons
+            this.createDirectionalButton(width / 2, controlsY - 20, '↑', 'up');
+            this.createDirectionalButton(width / 2 - buttonSpacing, controlsY + 20, '←', 'left');
+            this.createDirectionalButton(width / 2 + buttonSpacing, controlsY + 20, '→', 'right');
+            this.createDirectionalButton(width / 2, controlsY + 20, '↓', 'down');
+            
+            // Virtual cursor state
+            this.virtualCursors = {
+                left: { isDown: false },
+                right: { isDown: false },
+                up: { isDown: false },
+                down: { isDown: false }
+            };
+        }
+
+        createDirectionalButton(x, y, text, direction) {
+            const buttonSize = 45;
+            
+            // Button background
+            const button = this.add.rectangle(x, y, buttonSize, buttonSize, 0x654321);
+            button.setStrokeStyle(2, 0x8B4513);
+            button.setInteractive();
+            
+            // Button text
+            const buttonText = this.add.text(x, y, text, {
+                fontSize: '24px',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+
+            // Button interactions
+            button.on('pointerdown', () => {
+                this.virtualCursors[direction].isDown = true;
+                button.setFillStyle(0x8B4513); // Pressed state
+            });
+
+            button.on('pointerup', () => {
+                this.virtualCursors[direction].isDown = false;
+                button.setFillStyle(0x654321); // Normal state
+            });
+
+            button.on('pointerout', () => {
+                this.virtualCursors[direction].isDown = false;
+                button.setFillStyle(0x654321); // Normal state
+            });
+        }
+
+        hideMobileControls() {
+            if (this.mobileControlsBg) {
+                this.mobileControlsBg.setVisible(false);
+            }
+            // Hide all mobile control elements
+            const mazeEndY = 60 + (this.mazeHeight * this.tileSize);
+            this.children.list.forEach(child => {
+                if (child.y > mazeEndY) { // Controls are below maze
+                    child.setVisible(false);
+                }
+            });
+        }
+
+        showMobileControls() {
+            if (this.mobileControlsBg) {
+                this.mobileControlsBg.setVisible(true);
+            }
+            // Show all mobile control elements
+            const mazeEndY = 60 + (this.mazeHeight * this.tileSize);
+            this.children.list.forEach(child => {
+                if (child.y > mazeEndY) { // Controls are below maze
+                    child.setVisible(true);
+                }
+            });
+        }
+
+        updateUI() {
+            const healthPercent = this.playerHealth / this.playerMaxHealth;
+            this.healthBar.width = 100 * healthPercent;
+            this.healthBar.fillColor = healthPercent > 0.5 ? 0x00FF00 : (healthPercent > 0.25 ? 0xFFFF00 : 0xFF0000);
+            this.healthText.setText(`${this.playerHealth}/${this.playerMaxHealth}`);
+            this.killCountText.setText(`${this.monstersKilled}`);
+            this.mazeCountText.setText(`${this.mazesCompleted}`);
+        }
+
+        update(time, delta) {
+            const speed = 100;
+            let isMoving = false;
+
+            this.player.setVelocity(0);
+            
+            // Movement with boundary checks (accounting for menu offset)
+            const menuOffset = 60;
+            
+            // Check both physical and virtual controls
+            const leftPressed = this.cursors.left.isDown || this.virtualCursors.left.isDown;
+            const rightPressed = this.cursors.right.isDown || this.virtualCursors.right.isDown;
+            const upPressed = this.cursors.up.isDown || this.virtualCursors.up.isDown;
+            const downPressed = this.cursors.down.isDown || this.virtualCursors.down.isDown;
+            
+            if (leftPressed && this.player.x > 16) {
+                this.player.setVelocityX(-speed);
+                isMoving = true;
+            } else if (rightPressed && this.player.x < 624) {
+                this.player.setVelocityX(speed);
+                isMoving = true;
+            }
+            if (upPressed && this.player.y > 16 + menuOffset) {
+                this.player.setVelocityY(-speed);
+                isMoving = true;
+            } else if (downPressed && this.player.y < menuOffset + (this.mazeHeight * this.tileSize) - 16) {
+                this.player.setVelocityY(speed);
+                isMoving = true;
+            }
+
+            // Check if player reached exit
+            const exitX = (this.mazeWidth - 1) * this.tileSize;
+            const exitY = (this.mazeHeight - 2) * this.tileSize + menuOffset;
+
+            if (Phaser.Geom.Rectangle.Contains(
+                new Phaser.Geom.Rectangle(exitX, exitY, this.tileSize, this.tileSize),
+                this.player.x, this.player.y
+            )) {
+                this.mazesCompleted++;
+                
+                // Clear and recreate maze elements
+                this.clearMazeElements();
+                const generator = new MazeGenerator(this.mazeWidth, this.mazeHeight);
+                this.maze = generator.generate();
+                this.createDungeonBackground();
+                this.createPlayer();
+                
+                // Recreate UI and controls to ensure they're always there
+                this.createUI();
+                this.setupControls();
+            }
+
+            // Random encounters when moving
+            if (isMoving && this.encounterCooldown <= 0 && Phaser.Math.Between(0, 1000) < 3) {
+                this.encounterCooldown = 2000;
+                this.hideMobileControls();
+                this.scene.pause();
+                this.scene.launch('BattleScene');
+            }
+            this.encounterCooldown -= delta;
+        }
+    }
     class PreloadScene extends Phaser.Scene {
         constructor() {
             super('PreloadScene');
@@ -38,7 +424,7 @@
         }
         create() {
             const { width, height } = this.scale;
-            this.add.text(width / 2, height / 2, '¡Prepárate para jugar!', {
+            this.add.text(width / 2, height / 2, '¡Prepárate para explorar laberintos!', {
                 fontSize: '24px',
                 color: '#ffffff',
             }).setOrigin(0.5);
@@ -49,193 +435,23 @@
         }
     }
 
-    class WorldScene extends Phaser.Scene {
-        constructor() {
-            super('WorldScene');
-        }
-        create() {
-            // Generate random background
-            this.createRandomBackground();
-
-            this.player = this.physics.add.sprite(100, 100, 'player');
-            this.cursors = this.input.keyboard.createCursorKeys();
-
-            this.encounterCooldown = 0;
-            
-            // Player health
-            this.playerMaxHealth = 100;
-            this.playerHealth = this.playerMaxHealth;
-            this.monstersKilled = 0;
-            this.createHealthBar();
-        }
-        
-        createRandomBackground() {
-            const { width, height } = this.scale;
-            
-            // Sky gradient (top to bottom)
-            const skyTop = Phaser.Utils.Array.GetRandom([0x87CEEB, 0x4682B4, 0x6495ED]);
-            const skyBottom = Phaser.Utils.Array.GetRandom([0xFFE4B5, 0xF0E68C, 0xDDA0DD]);
-            
-            // Create sky layers
-            this.add.rectangle(width / 2, height * 0.3, width, height * 0.6, skyTop);
-            this.add.rectangle(width / 2, height * 0.7, width, height * 0.6, skyBottom);
-            
-            // Ground - main walking surface
-            this.add.rectangle(width / 2, height - 30, width, 60, 0x228B22); // Grass layer
-            this.add.rectangle(width / 2, height - 10, width, 20, 0x654321); // Dirt edge
-            
-            // Mountains in background
-            for (let i = 0; i < 5; i++) {
-                const x = Phaser.Math.Between(-50, width + 50);
-                const mountainHeight = Phaser.Math.Between(80, 150);
-                const mountainWidth = Phaser.Math.Between(100, 200);
-                this.add.triangle(x, height * 0.7, 0, mountainHeight, mountainWidth / 2, 0, mountainWidth, mountainHeight, 0x696969);
-            }
-            
-            // Medieval castle in distance
-            if (Phaser.Math.Between(0, 100) < 30) {
-                const castleX = Phaser.Math.Between(100, width - 100);
-                // Castle walls
-                this.add.rectangle(castleX, height * 0.6, 80, 60, 0x708090);
-                // Castle towers
-                this.add.rectangle(castleX - 30, height * 0.55, 20, 70, 0x708090);
-                this.add.rectangle(castleX + 30, height * 0.55, 20, 70, 0x708090);
-                // Flags
-                this.add.rectangle(castleX - 30, height * 0.45, 8, 15, 0xFF0000);
-                this.add.rectangle(castleX + 30, height * 0.45, 8, 15, 0x0000FF);
-            }
-            
-            // Background trees (smaller, in distance)
-            for (let i = 0; i < Phaser.Math.Between(5, 8); i++) {
-                const treeX = Phaser.Math.Between(50, width - 50);
-                const treeY = Phaser.Math.Between(height * 0.5, height * 0.7);
-                const treeSize = Phaser.Math.Between(0.5, 0.8);
-                
-                // Tree trunk
-                this.add.rectangle(treeX, treeY + 15 * treeSize, 6 * treeSize, 20 * treeSize, 0x654321);
-                
-                // Tree foliage
-                const foliageColor = Phaser.Utils.Array.GetRandom([0x228B22, 0x32CD32, 0x006400]);
-                this.add.circle(treeX, treeY, 15 * treeSize, foliageColor);
-            }
-            
-            // Foreground trees (larger, closer)
-            for (let i = 0; i < Phaser.Math.Between(3, 6); i++) {
-                const treeX = Phaser.Math.Between(50, width - 50);
-                const treeY = height - 80;
-                const treeSize = Phaser.Math.Between(1.2, 1.8);
-                
-                // Tree trunk
-                this.add.rectangle(treeX, treeY + 20 * treeSize, 10 * treeSize, 30 * treeSize, 0x654321);
-                
-                // Tree foliage
-                const foliageColor = Phaser.Utils.Array.GetRandom([0x228B22, 0x32CD32, 0x006400]);
-                this.add.circle(treeX, treeY, 25 * treeSize, foliageColor);
-                this.add.circle(treeX - 10 * treeSize, treeY - 8 * treeSize, 18 * treeSize, foliageColor);
-                this.add.circle(treeX + 10 * treeSize, treeY - 8 * treeSize, 18 * treeSize, foliageColor);
-            }
-            
-            // Medieval village houses (in background)
-            for (let i = 0; i < Phaser.Math.Between(1, 3); i++) {
-                const houseX = Phaser.Math.Between(100, width - 100);
-                const houseY = height * 0.65;
-                
-                // House base (smaller for distance)
-                this.add.rectangle(houseX, houseY, 30, 25, 0xD2B48C);
-                // Roof
-                this.add.triangle(houseX, houseY - 12, 0, -20, -20, 8, 20, 8, 0x8B4513);
-                // Door
-                this.add.rectangle(houseX, houseY + 8, 6, 12, 0x654321);
-                // Window
-                this.add.rectangle(houseX - 8, houseY - 3, 4, 4, 0xFFFF00);
-            }
-            
-            // Stone path on ground level
-            for (let i = 0; i < 15; i++) {
-                const stoneX = Phaser.Math.Between(0, width);
-                const stoneY = Phaser.Math.Between(height - 50, height - 20);
-                const stoneSize = Phaser.Math.Between(3, 6);
-                this.add.circle(stoneX, stoneY, stoneSize, 0x696969);
-            }
-            
-            // Clouds
-            for (let i = 0; i < Phaser.Math.Between(3, 6); i++) {
-                const cloudX = Phaser.Math.Between(50, width - 50);
-                const cloudY = Phaser.Math.Between(50, height * 0.4);
-                this.add.circle(cloudX, cloudY, 15, 0xFFFFFF);
-                this.add.circle(cloudX + 10, cloudY, 12, 0xFFFFFF);
-                this.add.circle(cloudX - 10, cloudY, 12, 0xFFFFFF);
-            }
-        }
-        
-        createHealthBar() {
-            this.healthBarBg = this.add.rectangle(100, 30, 102, 12, 0x000000);
-            this.healthBar = this.add.rectangle(100, 30, 100, 10, 0x00FF00);
-            this.healthText = this.add.text(20, 20, `HP: ${this.playerHealth}/${this.playerMaxHealth}`, {
-                fontSize: '16px',
-                color: '#ffffff'
-            });
-            this.killCountText = this.add.text(20, 50, `Monstruos: ${this.monstersKilled}`, {
-                fontSize: '16px',
-                color: '#ffff00',
-                stroke: '#000000',
-                strokeThickness: 1
-            });
-        }
-        
-        updateHealthBar() {
-            const healthPercent = this.playerHealth / this.playerMaxHealth;
-            this.healthBar.width = 100 * healthPercent;
-            this.healthBar.fillColor = healthPercent > 0.5 ? 0x00FF00 : (healthPercent > 0.25 ? 0xFFFF00 : 0xFF0000);
-            this.healthText.setText(`HP: ${this.playerHealth}/${this.playerMaxHealth}`);
-            this.killCountText.setText(`Monstruos: ${this.monstersKilled}`);
-        }
-
-        update(time, delta) {
-            const speed = 100;
-            let isMoving = false;
-            
-            this.player.setVelocity(0);
-            if (this.cursors.left.isDown && this.player.x > 16) {
-                this.player.setVelocityX(-speed);
-                isMoving = true;
-            } else if (this.cursors.right.isDown && this.player.x < 624) {
-                this.player.setVelocityX(speed);
-                isMoving = true;
-            }
-            if (this.cursors.up.isDown && this.player.y > 16) {
-                this.player.setVelocityY(-speed);
-                isMoving = true;
-            } else if (this.cursors.down.isDown && this.player.y < 464) {
-                this.player.setVelocityY(speed);
-                isMoving = true;
-            }
-
-            // Only trigger encounters when moving
-            if (isMoving && this.encounterCooldown <= 0 && Phaser.Math.Between(0, 1000) < 3) {
-                this.encounterCooldown = 2000;
-                this.scene.pause();
-                this.scene.launch('BattleScene');
-            }
-            this.encounterCooldown -= delta;
-        }
-    }
-
     class BattleScene extends Phaser.Scene {
         constructor() {
             super('BattleScene');
         }
+        
         create() {
             const { width, height } = this.scale;
             
-            // Create forest background
-            this.createForestBackground();
+            // Create mystical battle arena
+            this.createBattleArena();
             
-            // Make sprites bigger
-            this.enemy = this.add.sprite(width - 150, height / 2, 'enemy1');
+            // Make sprites bigger (positioned in main game area)
+            const gameAreaHeight = 480; // Original game area height
+            this.enemy = this.add.sprite(width - 150, gameAreaHeight / 2, 'enemy1');
             this.enemy.setScale(3);
             
-            this.player = this.add.sprite(150, height / 2, 'player');
+            this.player = this.add.sprite(150, gameAreaHeight / 2, 'player');
             this.player.setScale(3);
 
             // Health system
@@ -250,7 +466,7 @@
             this.timeLeft = 10000;
             this.battleEnded = false;
 
-            this.questionText = this.add.text(width / 2, height / 2 - 80, this.question.text, {
+            this.questionText = this.add.text(width / 2, gameAreaHeight / 2 - 80, this.question.text, {
                 fontSize: '32px',
                 color: '#ffffff',
                 stroke: '#000000',
@@ -258,7 +474,7 @@
             }).setOrigin(0.5);
 
             // Create input field manually
-            this.inputText = this.add.text(width / 2, height / 2 - 30, '', {
+            this.inputText = this.add.text(width / 2, gameAreaHeight / 2 - 30, '', {
                 fontSize: '24px',
                 color: '#ffffff',
                 stroke: '#000000',
@@ -273,22 +489,18 @@
             // Handle keyboard input
             this.input.keyboard.on('keydown', (event) => {
                 if (event.key >= '0' && event.key <= '9') {
-                    this.currentInput += event.key;
-                    this.inputText.setText(this.currentInput + '_');
+                    this.addDigit(event.key);
                 } else if (event.key === 'Backspace') {
-                    this.currentInput = this.currentInput.slice(0, -1);
-                    this.inputText.setText(this.currentInput + '_');
+                    this.removeDigit();
                 } else if (event.key === 'Enter') {
-                    const val = parseInt(this.currentInput);
-                    if (val === this.question.result) {
-                        this.handleCorrectAnswer();
-                    } else {
-                        this.handleWrongAnswer();
-                    }
+                    this.submitAnswer();
                 }
             });
 
-            this.resultText = this.add.text(width / 2, height / 2 + 20, '', {
+            // Create mobile numeric keypad
+            this.createNumericKeypad();
+
+            this.resultText = this.add.text(width / 2, gameAreaHeight / 2 + 20, '', {
                 fontSize: '24px',
                 color: '#ffff00',
                 stroke: '#000000',
@@ -296,7 +508,7 @@
             }).setOrigin(0.5);
             
             // Timer display
-            this.timerText = this.add.text(width / 2, height / 2 + 60, '', {
+            this.timerText = this.add.text(width / 2, gameAreaHeight / 2 + 60, '', {
                 fontSize: '18px',
                 color: '#ff0000',
                 stroke: '#000000',
@@ -305,51 +517,177 @@
             
             this.updateTimer();
         }
+
+        createNumericKeypad() {
+            const { width, height } = this.scale;
+            const gameAreaHeight = 480;
+            const keypadHeight = 160;
+            const keypadStartY = gameAreaHeight + 20;
+            const buttonSize = 35;
+            const spacing = 45;
+            
+            // Keypad background
+            this.add.rectangle(width / 2, gameAreaHeight + keypadHeight / 2, width, keypadHeight, 0x2F2F2F, 0.9);
+            
+            // Number buttons (1-9)
+            const numbers = ['1', '2', '3', '4', '5', '6', '7', '8', '9'];
+            for (let i = 0; i < 9; i++) {
+                const row = Math.floor(i / 3);
+                const col = i % 3;
+                const x = width / 2 - spacing + (col * spacing);
+                const y = keypadStartY + (row * 40);
+                
+                this.createNumberButton(x, y, numbers[i], buttonSize);
+            }
+            
+            // Zero button
+            this.createNumberButton(width / 2 - spacing, keypadStartY + 120, '0', buttonSize);
+            
+            // Backspace button
+            this.createNumberButton(width / 2, keypadStartY + 120, '⌫', buttonSize, true);
+            
+            // OK button
+            this.createNumberButton(width / 2 + spacing, keypadStartY + 120, 'OK', buttonSize, false, true);
+        }
+
+        createNumberButton(x, y, text, size, isBackspace = false, isOK = false) {
+            // Button background
+            let buttonColor = 0x654321;
+            if (isOK) buttonColor = 0x228B22;
+            else if (isBackspace) buttonColor = 0x8B4513;
+            
+            const button = this.add.rectangle(x, y, size, size, buttonColor);
+            button.setStrokeStyle(2, 0x8B4513);
+            button.setInteractive();
+            
+            // Button text
+            this.add.text(x, y, text, {
+                fontSize: isOK ? '14px' : '20px',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 2
+            }).setOrigin(0.5);
+
+            // Button interactions
+            button.on('pointerdown', () => {
+                button.setFillStyle(buttonColor + 0x222222); // Pressed state
+                
+                if (isBackspace) {
+                    this.removeDigit();
+                } else if (isOK) {
+                    this.submitAnswer();
+                } else {
+                    this.addDigit(text);
+                }
+            });
+
+            button.on('pointerup', () => {
+                button.setFillStyle(buttonColor); // Normal state
+            });
+
+            button.on('pointerout', () => {
+                button.setFillStyle(buttonColor); // Normal state
+            });
+        }
+
+        addDigit(digit) {
+            if (this.currentInput.length < 4) { // Limit input length
+                this.currentInput += digit;
+                this.inputText.setText(this.currentInput + '_');
+            }
+        }
+
+        removeDigit() {
+            this.currentInput = this.currentInput.slice(0, -1);
+            this.inputText.setText(this.currentInput + '_');
+        }
+
+        submitAnswer() {
+            const val = parseInt(this.currentInput);
+            if (val === this.question.result) {
+                this.handleCorrectAnswer();
+            } else {
+                this.handleWrongAnswer();
+            }
+        }
         
-        createForestBackground() {
+        createBattleArena() {
             const { width, height } = this.scale;
             
-            // Dark forest background
-            this.add.rectangle(width / 2, height / 2, width, height, 0x1a4a1a);
+            // Subtle background variations with dungeon tones
+            const baseColors = [0x2F2F2F, 0x3A3A3A, 0x454545];
+            const floorColors = [0x8B7355, 0x696969, 0x654321];
             
-            // Trees
-            for (let i = 0; i < 8; i++) {
-                const x = Phaser.Math.Between(50, width - 50);
-                const y = Phaser.Math.Between(100, height - 100);
-                
-                // Tree trunk
-                this.add.rectangle(x, y + 20, 15, 40, 0x654321);
-                
-                // Tree crown
-                this.add.circle(x, y, 25, 0x228B22);
-                this.add.circle(x - 10, y - 5, 20, 0x32CD32);
-                this.add.circle(x + 10, y - 5, 20, 0x32CD32);
-            }
+            const bgColor = Phaser.Utils.Array.GetRandom(baseColors);
+            const floorColor = Phaser.Utils.Array.GetRandom(floorColors);
             
-            // Ground
-            this.add.rectangle(width / 2, height - 20, width, 40, 0x654321);
-        }
-        
-        update(time, delta) {
-            if (!this.battleEnded) {
-                this.timeLeft -= delta;
-                if (this.timeLeft <= 0) {
-                    this.handleWrongAnswer();
+            // Dark stone background
+            this.add.rectangle(width / 2, height / 2, width, height, bgColor);
+            
+            // Create subtle brick pattern on walls (avoiding center area)
+            const brickWidth = 24;
+            const brickHeight = 12;
+            
+            // Top area bricks
+            for (let y = 0; y < 3; y++) {
+                for (let x = 0; x < Math.ceil(width / brickWidth); x++) {
+                    const offsetX = (y % 2) * (brickWidth / 2);
+                    const brickX = x * brickWidth + offsetX;
+                    const brickY = y * brickHeight;
+                    
+                    if (brickX < width) {
+                        this.add.rectangle(brickX + brickWidth/2, brickY + brickHeight/2, brickWidth - 2, brickHeight - 1, 0x4A4A4A, 0.6);
+                    }
                 }
-                this.updateTimer();
             }
-        }
-        
-        updateTimer() {
-            const seconds = Math.ceil(this.timeLeft / 1000);
-            this.timerText.setText(`Tiempo: ${seconds}s`);
             
-            if (seconds <= 2) {
-                this.timerText.setColor('#ff0000');
-            } else if (seconds <= 3) {
-                this.timerText.setColor('#ffaa00');
-            } else {
-                this.timerText.setColor('#ffffff');
+            // Bottom area bricks (above floor)
+            for (let y = 0; y < 2; y++) {
+                for (let x = 0; x < Math.ceil(width / brickWidth); x++) {
+                    const offsetX = (y % 2) * (brickWidth / 2);
+                    const brickX = x * brickWidth + offsetX;
+                    const brickY = height - 100 + y * brickHeight;
+                    
+                    if (brickX < width) {
+                        this.add.rectangle(brickX + brickWidth/2, brickY + brickHeight/2, brickWidth - 2, brickHeight - 1, 0x4A4A4A, 0.6);
+                    }
+                }
+            }
+            
+            // Side area bricks (avoiding center)
+            for (let y = 3; y < Math.ceil((height - 100) / brickHeight) - 2; y++) {
+                // Left side
+                for (let x = 0; x < 3; x++) {
+                    const offsetX = (y % 2) * (brickWidth / 2);
+                    const brickX = x * brickWidth + offsetX;
+                    const brickY = y * brickHeight;
+                    
+                    if (brickX < 100) {
+                        this.add.rectangle(brickX + brickWidth/2, brickY + brickHeight/2, brickWidth - 2, brickHeight - 1, 0x4A4A4A, 0.6);
+                    }
+                }
+                
+                // Right side
+                for (let x = Math.ceil(width / brickWidth) - 3; x < Math.ceil(width / brickWidth); x++) {
+                    const offsetX = (y % 2) * (brickWidth / 2);
+                    const brickX = x * brickWidth + offsetX;
+                    const brickY = y * brickHeight;
+                    
+                    if (brickX >= width - 100 && brickX < width) {
+                        this.add.rectangle(brickX + brickWidth/2, brickY + brickHeight/2, brickWidth - 2, brickHeight - 1, 0x4A4A4A, 0.6);
+                    }
+                }
+            }
+            
+            // Stone floor
+            this.add.rectangle(width / 2, height - 40, width, 80, floorColor);
+            
+            // Simple stone pattern on floor
+            for (let i = 0; i < 8; i++) {
+                const stoneX = Phaser.Math.Between(50, width - 50);
+                const stoneY = Phaser.Math.Between(height - 70, height - 20);
+                const stoneSize = Phaser.Math.Between(3, 6);
+                this.add.circle(stoneX, stoneY, stoneSize, 0x555555, 0.4);
             }
         }
         
@@ -386,8 +724,8 @@
         }
         
         handleCorrectAnswer() {
-            if (this.battleEnded) return; // Prevent multiple calls
-            this.battleEnded = true; // Stop timer immediately
+            if (this.battleEnded) return;
+            this.battleEnded = true;
             this.resultText.setText('¡Correcto! Atacas a la bestia');
             this.enemyHealth -= 20;
             this.updateHealthBars();
@@ -400,17 +738,17 @@
                 if (worldScene.playerHealth > worldScene.playerMaxHealth) {
                     worldScene.playerHealth = worldScene.playerMaxHealth;
                 }
-                worldScene.updateHealthBar();
+                worldScene.updateUI();
                 
                 this.resultText.setText('¡Victoria! Bestia derrotada (+5 HP)');
                 this.time.delayedCall(2000, () => {
                     this.scene.stop();
                     this.scene.resume('WorldScene');
+                    this.scene.get('WorldScene').showMobileControls();
                 });
             } else {
                 this.time.delayedCall(1000, () => {
-                    // Continue battle with new question
-                    this.battleEnded = false; // Resume battle
+                    this.battleEnded = false;
                     this.question = this.generateQuestion();
                     this.questionText.setText(this.question.text);
                     this.currentInput = '';
@@ -423,34 +761,32 @@
         }
         
         handleWrongAnswer() {
-            if (this.battleEnded) return; // Prevent multiple calls
-            this.battleEnded = true; // Stop timer immediately
+            if (this.battleEnded) return;
+            this.battleEnded = true;
             this.resultText.setText(`¡Fallaste! La respuesta era ${this.question.result}`);
             this.playerHealth -= 15;
             
-            // Ensure health doesn't go below 0
             if (this.playerHealth < 0) {
                 this.playerHealth = 0;
             }
             
             this.updateHealthBars();
             
-            // Update WorldScene player health
-            this.scene.get('WorldScene').playerHealth = this.playerHealth;
-            this.scene.get('WorldScene').updateHealthBar();
+            const worldScene = this.scene.get('WorldScene');
+            worldScene.playerHealth = this.playerHealth;
+            worldScene.updateUI();
             
             if (this.playerHealth <= 0) {
                 this.resultText.setText('¡Derrota! Has sido vencido');
                 this.time.delayedCall(2000, () => {
                     this.scene.stop();
                     this.scene.start('WorldScene');
-                    this.scene.get('WorldScene').playerHealth = this.playerMaxHealth;
-                    this.scene.get('WorldScene').updateHealthBar();
+                    worldScene.playerHealth = this.playerMaxHealth;
+                    worldScene.updateUI();
                 });
             } else {
                 this.time.delayedCall(2000, () => {
-                    // Continue battle with new question after showing answer
-                    this.battleEnded = false; // Resume battle
+                    this.battleEnded = false;
                     this.question = this.generateQuestion();
                     this.questionText.setText(this.question.text);
                     this.currentInput = '';
@@ -459,6 +795,29 @@
                     this.timeLeft = 10000;
                     this.updateTimer();
                 });
+            }
+        }
+
+        update(time, delta) {
+            if (!this.battleEnded) {
+                this.timeLeft -= delta;
+                if (this.timeLeft <= 0) {
+                    this.handleWrongAnswer();
+                }
+                this.updateTimer();
+            }
+        }
+        
+        updateTimer() {
+            const seconds = Math.ceil(this.timeLeft / 1000);
+            this.timerText.setText(`Tiempo: ${seconds}s`);
+            
+            if (seconds <= 2) {
+                this.timerText.setColor('#ff0000');
+            } else if (seconds <= 3) {
+                this.timerText.setColor('#ffaa00');
+            } else {
+                this.timerText.setColor('#ffffff');
             }
         }
 
@@ -475,7 +834,7 @@
     const config = {
         type: Phaser.AUTO,
         width: 640,
-        height: 480,
+        height: 640, // Increased height to accommodate mobile controls
         backgroundColor: '#000000',
         parent: 'game-container',
         scene: [PreloadScene, IntroScene, WorldScene, BattleScene],
