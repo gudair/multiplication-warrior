@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1" />
-  <title>Guerrero vs Bestias - Laberintos</title>
+  <title>Multiplication Warrior - Maze Adventure</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
   <style>
       body {
@@ -23,11 +23,22 @@
 </head>
 <body>
 
-<!-- Load separate JavaScript files -->
+<!-- Load maze generator -->
 <script src="js/MazeGenerator.js"></script>
 
 <script>
-    // Include WorldScene directly for now to avoid loading issues
+    // Game constants
+    const GAME_CONFIG = {
+        PLAYER_MAX_HEALTH: 100,
+        TILE_SIZE: 32,
+        MAZE_WIDTH: 20,
+        MAZE_HEIGHT: 13,
+        MENU_HEIGHT: 60,
+        ENCOUNTER_CHANCE: 3, // per 1000
+        ENCOUNTER_COOLDOWN: 2000
+    };
+
+    // Game classes and scenes
     class WorldScene extends Phaser.Scene {
         constructor() {
             super('WorldScene');
@@ -35,19 +46,22 @@
 
         create() {
             // Initialize game state
-            this.playerMaxHealth = 100;
+            this.playerMaxHealth = GAME_CONFIG.PLAYER_MAX_HEALTH;
             this.playerHealth = this.playerMaxHealth;
             this.monstersKilled = 0;
             this.mazesCompleted = 0;
             this.encounterCooldown = 0;
 
             // Maze properties
-            this.tileSize = 32;
-            this.mazeWidth = 20;
-            this.mazeHeight = 13; // Reduced to fit in viewport with menu
+            this.tileSize = GAME_CONFIG.TILE_SIZE;
+            this.mazeWidth = GAME_CONFIG.MAZE_WIDTH;
+            this.mazeHeight = GAME_CONFIG.MAZE_HEIGHT;
             
             // Initialize maze elements array
             this.mazeElements = [];
+            
+            // Initialize battle transition flag
+            this.inBattleTransition = false;
 
             // Generate first maze
             this.generateNewMaze();
@@ -99,7 +113,7 @@
             this.walls = this.physics.add.staticGroup();
 
             // Draw maze (offset by menu height)
-            const menuOffset = 60;
+            const menuOffset = GAME_CONFIG.MENU_HEIGHT;
             for (let y = 0; y < this.mazeHeight; y++) {
                 for (let x = 0; x < this.mazeWidth; x++) {
                     const pixelX = x * this.tileSize;
@@ -148,13 +162,16 @@
 
         createPlayer() {
             // Place player at entrance (offset by menu height)
-            const menuOffset = 60;
-            this.player = this.physics.add.sprite(this.tileSize/2, this.tileSize + this.tileSize/2 + menuOffset, 'player');
+            const menuOffset = GAME_CONFIG.MENU_HEIGHT;
+            this.player = this.physics.add.sprite(this.tileSize/2, this.tileSize + this.tileSize/2 + menuOffset, 'player_0');
             this.player.setCollideWorldBounds(true);
             
             // Make player collision box smaller for smoother movement
             this.player.body.setSize(this.tileSize - 8, this.tileSize - 8);
             this.player.body.setOffset(4, 4);
+            
+            // Start with idle animation
+            this.player.play('warrior_idle');
 
             // Add collision between player and walls
             this.physics.add.collider(this.player, this.walls);
@@ -167,7 +184,7 @@
 
         createTopMenu() {
             const { width } = this.scale;
-            const menuHeight = 60;
+            const menuHeight = GAME_CONFIG.MENU_HEIGHT;
             
             // Retro brick-style background
             const menuBg = this.add.rectangle(width / 2, menuHeight / 2, width, menuHeight, 0x8B4513);
@@ -256,7 +273,7 @@
 
         createMobileControls() {
             const { width, height } = this.scale;
-            const mazeEndY = 60 + (this.mazeHeight * this.tileSize); // Menu height + maze height
+            const mazeEndY = GAME_CONFIG.MENU_HEIGHT + (this.mazeHeight * this.tileSize); // Menu height + maze height
             const controlsY = mazeEndY + 40;
             const buttonSize = 50;
             const buttonSpacing = 60;
@@ -312,28 +329,90 @@
             });
         }
 
-        hideMobileControls() {
+        toggleMobileControls(visible) {
             if (this.mobileControlsBg) {
-                this.mobileControlsBg.setVisible(false);
+                this.mobileControlsBg.setVisible(visible);
             }
-            // Hide all mobile control elements
-            const mazeEndY = 60 + (this.mazeHeight * this.tileSize);
+            // Toggle all mobile control elements
+            const mazeEndY = GAME_CONFIG.MENU_HEIGHT + (this.mazeHeight * this.tileSize);
             this.children.list.forEach(child => {
                 if (child.y > mazeEndY) { // Controls are below maze
-                    child.setVisible(false);
+                    child.setVisible(visible);
                 }
             });
         }
 
+        hideMobileControls() {
+            this.toggleMobileControls(false);
+        }
+
         showMobileControls() {
-            if (this.mobileControlsBg) {
-                this.mobileControlsBg.setVisible(true);
+            this.toggleMobileControls(true);
+        }
+        
+        startBattleTransition() {
+            // Block all input and stop player animation
+            this.inBattleTransition = true;
+            this.player.setVelocity(0);
+            this.player.stop();
+            this.player.play('warrior_idle');
+            
+            // Create battle transition effect
+            const { width, height } = this.scale;
+            
+            // Create flash effect
+            const flash = this.add.rectangle(width / 2, height / 2, width, height, 0xffffff, 0);
+            
+            // Flash animation
+            this.tweens.add({
+                targets: flash,
+                alpha: 1,
+                duration: 100,
+                yoyo: true,
+                repeat: 2,
+                onComplete: () => {
+                    flash.destroy();
+                    this.createBattleSwirl();
+                }
+            });
+        }
+        
+        createBattleSwirl() {
+            const { width, height } = this.scale;
+            
+            // Create swirl overlay
+            const swirlBg = this.add.rectangle(width / 2, height / 2, width, height, 0x000000, 0);
+            
+            // Create animated circles for swirl effect
+            const circles = [];
+            for (let i = 0; i < 8; i++) {
+                const circle = this.add.circle(width / 2, height / 2, 20, 0xffffff, 0.8);
+                circles.push(circle);
+                
+                // Animate circles in spiral
+                this.tweens.add({
+                    targets: circle,
+                    x: width / 2 + Math.cos(i * Math.PI / 4) * 200,
+                    y: height / 2 + Math.sin(i * Math.PI / 4) * 200,
+                    alpha: 0,
+                    duration: 800,
+                    delay: i * 50
+                });
             }
-            // Show all mobile control elements
-            const mazeEndY = 60 + (this.mazeHeight * this.tileSize);
-            this.children.list.forEach(child => {
-                if (child.y > mazeEndY) { // Controls are below maze
-                    child.setVisible(true);
+            
+            // Fade to black
+            this.tweens.add({
+                targets: swirlBg,
+                alpha: 1,
+                duration: 600,
+                onComplete: () => {
+                    // Clean up circles
+                    circles.forEach(circle => circle.destroy());
+                    swirlBg.destroy();
+                    
+                    // Start battle
+                    this.scene.pause();
+                    this.scene.launch('BattleScene');
                 }
             });
         }
@@ -348,13 +427,19 @@
         }
 
         update(time, delta) {
+            // Don't process input during battle transition
+            if (this.inBattleTransition) {
+                this.player.setVelocity(0);
+                return;
+            }
+            
             const speed = 100;
             let isMoving = false;
 
             this.player.setVelocity(0);
             
             // Movement with boundary checks (accounting for menu offset)
-            const menuOffset = 60;
+            const menuOffset = GAME_CONFIG.MENU_HEIGHT;
             
             // Check both physical and virtual controls
             const leftPressed = this.cursors.left.isDown || this.virtualCursors.left.isDown;
@@ -364,9 +449,11 @@
             
             if (leftPressed && this.player.x > 16) {
                 this.player.setVelocityX(-speed);
+                this.player.setFlipX(true); // Flip sprite when moving left
                 isMoving = true;
             } else if (rightPressed && this.player.x < 624) {
                 this.player.setVelocityX(speed);
+                this.player.setFlipX(false); // Normal direction when moving right
                 isMoving = true;
             }
             if (upPressed && this.player.y > 16 + menuOffset) {
@@ -375,6 +462,17 @@
             } else if (downPressed && this.player.y < menuOffset + (this.mazeHeight * this.tileSize) - 16) {
                 this.player.setVelocityY(speed);
                 isMoving = true;
+            }
+            
+            // Handle player animations (simple flip without erratic movement)
+            if (isMoving) {
+                if (this.player.anims.currentAnim?.key !== 'warrior_walk') {
+                    this.player.play('warrior_walk');
+                }
+            } else {
+                if (this.player.anims.currentAnim?.key !== 'warrior_idle') {
+                    this.player.play('warrior_idle');
+                }
             }
 
             // Check if player reached exit
@@ -399,12 +497,12 @@
                 this.setupControls();
             }
 
-            // Random encounters when moving
-            if (isMoving && this.encounterCooldown <= 0 && Phaser.Math.Between(0, 1000) < 3) {
-                this.encounterCooldown = 2000;
+            // Random encounters when moving (only if not in transition)
+            if (isMoving && !this.inBattleTransition && this.encounterCooldown <= 0 && Phaser.Math.Between(0, 1000) < GAME_CONFIG.ENCOUNTER_CHANCE) {
+                this.encounterCooldown = GAME_CONFIG.ENCOUNTER_COOLDOWN;
+                this.inBattleTransition = true; // Block further input
                 this.hideMobileControls();
-                this.scene.pause();
-                this.scene.launch('BattleScene');
+                this.startBattleTransition();
             }
             this.encounterCooldown -= delta;
         }
@@ -414,11 +512,172 @@
             super('PreloadScene');
         }
         preload() {
-            this.load.image('player', 'assets/warrior.png');
+            // Create better warrior sprite sheet
+            this.createBetterWarriorSprites();
+            
+            // Load enemy sprites
             this.load.image('enemy1', 'assets/enemies/beast1.png');
+            this.load.image('enemy2', 'assets/enemies/beast2.png');
+            this.load.image('enemy3', 'assets/enemies/beast3.png');
+            this.load.image('enemy4', 'assets/enemies/beast4.png');
+        }
+        
+        createBetterWarriorSprites() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 96; // 3 frames x 32px (tamaño correcto para tiles)
+            canvas.height = 32;
+            const ctx = canvas.getContext('2d');
+            
+            // Frame 1: Idle (0-31px)
+            this.drawBetterWarrior(ctx, 0, 'idle');
+            // Frame 2: Walk 1 (32-63px) 
+            this.drawBetterWarrior(ctx, 32, 'walk1');
+            // Frame 3: Walk 2 (64-95px)
+            this.drawBetterWarrior(ctx, 64, 'walk2');
+            
+            // Create texture and add to cache
+            this.textures.addCanvas('player', canvas);
+            
+            // Also create individual frame textures
+            const frameCanvas1 = document.createElement('canvas');
+            frameCanvas1.width = 32;
+            frameCanvas1.height = 32;
+            const frameCtx1 = frameCanvas1.getContext('2d');
+            frameCtx1.drawImage(canvas, 0, 0, 32, 32, 0, 0, 32, 32);
+            this.textures.addCanvas('player_0', frameCanvas1);
+            
+            const frameCanvas2 = document.createElement('canvas');
+            frameCanvas2.width = 32;
+            frameCanvas2.height = 32;
+            const frameCtx2 = frameCanvas2.getContext('2d');
+            frameCtx2.drawImage(canvas, 32, 0, 32, 32, 0, 0, 32, 32);
+            this.textures.addCanvas('player_1', frameCanvas2);
+            
+            const frameCanvas3 = document.createElement('canvas');
+            frameCanvas3.width = 32;
+            frameCanvas3.height = 32;
+            const frameCtx3 = frameCanvas3.getContext('2d');
+            frameCtx3.drawImage(canvas, 64, 0, 32, 32, 0, 0, 32, 32);
+            this.textures.addCanvas('player_2', frameCanvas3);
+        }
+        
+        drawBetterWarrior(ctx, offsetX, frameType) {
+            // Limpiar el área
+            ctx.clearRect(offsetX, 0, 32, 32);
+            
+            // Casco/cabeza (más pequeño y mejor)
+            ctx.fillStyle = '#C0C0C0'; // Casco plateado
+            ctx.fillRect(offsetX + 12, 4, 8, 8);
+            
+            // Cara visible
+            ctx.fillStyle = '#FDBCB4'; // Piel
+            ctx.fillRect(offsetX + 14, 6, 4, 4);
+            
+            // Ojos
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(offsetX + 15, 7, 1, 1);
+            ctx.fillRect(offsetX + 17, 7, 1, 1);
+            
+            // Cuerpo armadura
+            ctx.fillStyle = '#4169E1'; // Azul real
+            ctx.fillRect(offsetX + 11, 12, 10, 8);
+            
+            // Detalles de armadura
+            ctx.fillStyle = '#FFD700'; // Oro
+            ctx.fillRect(offsetX + 13, 14, 6, 1);
+            ctx.fillRect(offsetX + 15, 16, 2, 2);
+            
+            // Brazos y posición según frame
+            ctx.fillStyle = '#4169E1';
+            if (frameType === 'idle') {
+                // Brazos normales
+                ctx.fillRect(offsetX + 8, 14, 3, 6);
+                ctx.fillRect(offsetX + 21, 14, 3, 6);
+                // Espada
+                ctx.fillStyle = '#C0C0C0';
+                ctx.fillRect(offsetX + 25, 10, 1, 8);
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(offsetX + 24, 17, 3, 2);
+            } else if (frameType === 'walk1') {
+                // Brazo izq adelante, der atrás
+                ctx.fillRect(offsetX + 9, 13, 3, 6);
+                ctx.fillRect(offsetX + 20, 15, 3, 6);
+                ctx.fillStyle = '#C0C0C0';
+                ctx.fillRect(offsetX + 23, 11, 1, 8);
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(offsetX + 22, 18, 3, 2);
+            } else if (frameType === 'walk2') {
+                // Brazo der adelante, izq atrás
+                ctx.fillRect(offsetX + 7, 15, 3, 6);
+                ctx.fillRect(offsetX + 22, 13, 3, 6);
+                ctx.fillStyle = '#C0C0C0';
+                ctx.fillRect(offsetX + 25, 9, 1, 8);
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(offsetX + 24, 16, 3, 2);
+            }
+            
+            // Piernas según frame
+            ctx.fillStyle = '#8B4513'; // Pantalones marrones
+            if (frameType === 'idle') {
+                // Piernas rectas
+                ctx.fillRect(offsetX + 13, 20, 3, 8);
+                ctx.fillRect(offsetX + 16, 20, 3, 8);
+            } else if (frameType === 'walk1') {
+                // Pierna izq adelante
+                ctx.fillRect(offsetX + 14, 20, 3, 8);
+                ctx.fillRect(offsetX + 15, 21, 3, 7);
+            } else if (frameType === 'walk2') {
+                // Pierna der adelante
+                ctx.fillRect(offsetX + 12, 21, 3, 7);
+                ctx.fillRect(offsetX + 16, 20, 3, 8);
+            }
+            
+            // Botas
+            ctx.fillStyle = '#2F2F2F';
+            if (frameType === 'idle') {
+                ctx.fillRect(offsetX + 12, 28, 4, 3);
+                ctx.fillRect(offsetX + 16, 28, 4, 3);
+            } else if (frameType === 'walk1') {
+                ctx.fillRect(offsetX + 13, 28, 4, 3);
+                ctx.fillRect(offsetX + 14, 29, 4, 2);
+            } else if (frameType === 'walk2') {
+                ctx.fillRect(offsetX + 11, 29, 4, 2);
+                ctx.fillRect(offsetX + 15, 28, 4, 3);
+            }
         }
         create() {
+            // Create warrior animations
+            this.createWarriorAnimations();
             this.scene.start('IntroScene');
+        }
+        
+        createWarriorAnimations() {
+            // Create animations using individual frame textures
+            this.anims.create({
+                key: 'warrior_idle',
+                frames: [{ key: 'player_0' }],
+                frameRate: 1,
+                repeat: -1
+            });
+            
+            this.anims.create({
+                key: 'warrior_walk',
+                frames: [
+                    { key: 'player_1' },
+                    { key: 'player_0' },
+                    { key: 'player_2' },
+                    { key: 'player_0' }
+                ],
+                frameRate: 8,
+                repeat: -1
+            });
+            
+            this.anims.create({
+                key: 'warrior_attack',
+                frames: [{ key: 'player_0' }],
+                frameRate: 8,
+                repeat: 0
+            });
         }
     }
 
@@ -450,13 +709,25 @@
             // Create mystical battle arena
             this.createBattleArena();
             
+            // Select random enemy
+            const enemyTypes = ['enemy1', 'enemy2', 'enemy3', 'enemy4'];
+            const randomEnemyType = Phaser.Utils.Array.GetRandom(enemyTypes);
+            
             // Make sprites bigger (positioned in main game area)
             const gameAreaHeight = 480; // Original game area height
-            this.enemy = this.add.sprite(width - 150, gameAreaHeight / 2, 'enemy1');
+            this.enemy = this.add.sprite(width - 150, gameAreaHeight / 2, randomEnemyType);
             this.enemy.setScale(3);
+            this.enemy.enemyType = randomEnemyType; // Store for animations
             
-            this.player = this.add.sprite(150, gameAreaHeight / 2, 'player');
+            this.player = this.add.sprite(150, gameAreaHeight / 2, 'player_0');
             this.player.setScale(3);
+            
+            // Create enemy animations
+            this.createEnemyAnimations();
+            
+            // Start idle animations
+            this.player.play('warrior_idle');
+            this.startEnemyIdle();
 
             // Health system
             this.playerMaxHealth = 100;
@@ -704,8 +975,15 @@
             this.playerHealthBar = this.add.rectangle(100, 30, 100, 10, 0x00FF00);
             this.playerHealthText = this.add.text(155, 45, '', { fontSize: '12px', color: '#ffffff', stroke: '#000000', strokeThickness: 1 });
             
-            // Enemy health bar
-            this.add.text(width - 150, 10, 'Bestia', { fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 1 });
+            // Enemy health bar - dynamic name based on enemy type
+            const enemyNames = {
+                'enemy1': 'Bestia',
+                'enemy2': 'Orco',
+                'enemy3': 'Dragón',
+                'enemy4': 'Esqueleto'
+            };
+            const enemyName = enemyNames[this.enemy.enemyType] || 'Bestia';
+            this.add.text(width - 150, 10, enemyName, { fontSize: '14px', color: '#ffffff', stroke: '#000000', strokeThickness: 1 });
             this.enemyHealthBg = this.add.rectangle(width - 100, 30, 102, 12, 0x000000);
             this.enemyHealthBar = this.add.rectangle(width - 100, 30, 100, 10, 0xFF0000);
             this.enemyHealthText = this.add.text(width - 200, 45, '', { fontSize: '12px', color: '#ffffff', stroke: '#000000', strokeThickness: 1 });
@@ -731,6 +1009,10 @@
             if (this.battleEnded) return;
             this.battleEnded = true;
             this.resultText.setText('¡Correcto! Atacas a la bestia');
+            
+            // Play player attack animation
+            this.playPlayerAttack();
+            
             this.enemyHealth -= 20;
             this.updateHealthBars();
             
@@ -747,8 +1029,10 @@
                 this.resultText.setText('¡Victoria! Bestia derrotada (+5 HP)');
                 this.time.delayedCall(2000, () => {
                     this.scene.stop();
+                    const worldScene = this.scene.get('WorldScene');
+                    worldScene.inBattleTransition = false; // Re-enable input
                     this.scene.resume('WorldScene');
-                    this.scene.get('WorldScene').showMobileControls();
+                    worldScene.showMobileControls();
                 });
             } else {
                 this.time.delayedCall(1000, () => {
@@ -768,6 +1052,10 @@
             if (this.battleEnded) return;
             this.battleEnded = true;
             this.resultText.setText(`¡Fallaste! La respuesta era ${this.question.result}`);
+            
+            // Play enemy attack animation
+            this.playEnemyAttack();
+            
             this.playerHealth -= 15;
             
             if (this.playerHealth < 0) {
@@ -832,6 +1120,61 @@
                 text: `${a} × ${b} = ?`,
                 result: a * b
             };
+        }
+        
+        createEnemyAnimations() {
+            // Enemy animations are handled via tweens, not sprite animations
+            // This keeps the code simpler since enemies are single-frame sprites
+        }
+        
+        startEnemyIdle() {
+            // Simple breathing animation for enemy
+            this.enemyIdleTween = this.tweens.add({
+                targets: this.enemy,
+                scaleX: 3.1,
+                scaleY: 2.9,
+                duration: 1500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+        }
+        
+        playEnemyAttack() {
+            // Stop idle animation
+            if (this.enemyIdleTween) {
+                this.enemyIdleTween.stop();
+            }
+            
+            // Attack animation - quick forward lunge
+            this.tweens.add({
+                targets: this.enemy,
+                x: this.enemy.x - 50,
+                scaleX: 3.3,
+                scaleY: 2.7,
+                duration: 200,
+                yoyo: true,
+                onComplete: () => {
+                    // Resume idle
+                    this.startEnemyIdle();
+                }
+            });
+        }
+        
+        playPlayerAttack() {
+            // Player attack animation
+            this.player.play('warrior_attack');
+            
+            this.tweens.add({
+                targets: this.player,
+                x: this.player.x + 30,
+                scaleX: 3.2,
+                duration: 150,
+                yoyo: true,
+                onComplete: () => {
+                    this.player.play('warrior_idle');
+                }
+            });
         }
     }
 

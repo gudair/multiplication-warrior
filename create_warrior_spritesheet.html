@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crear Sprite Sheet del Guerrero</title>
+</head>
+<body>
+    <h2>Generador de Sprite Sheet - Guerrero Animado</h2>
+    <canvas id="canvas" width="192" height="64"></canvas>
+    <br><br>
+    <button onclick="createWarriorSpriteSheet()">Crear Sprite Sheet del Guerrero</button>
+    <br><br>
+    <a id="downloadLink" style="display:none;">Descargar Sprite Sheet</a>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        function createWarriorSpriteSheet() {
+            ctx.clearRect(0, 0, 192, 64);
+            
+            // Frame 1: Idle/Stand
+            drawWarriorFrame1(0);
+            
+            // Frame 2: Walking - Left leg forward
+            drawWarriorFrame2(64);
+            
+            // Frame 3: Walking - Right leg forward  
+            drawWarriorFrame3(128);
+            
+            downloadSprite('warrior_spritesheet.png');
+        }
+
+        function drawWarriorFrame1(offsetX) {
+            // Frame 1: Guerrero quieto
+            
+            // Cabeza
+            ctx.fillStyle = '#D2B48C'; // Piel
+            ctx.fillRect(offsetX + 24, 8, 16, 16);
+            
+            // Cabello marrón
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(offsetX + 22, 6, 20, 10);
+            
+            // Ojos
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(offsetX + 26, 12, 2, 2);
+            ctx.fillRect(offsetX + 36, 12, 2, 2);
+            
+            // Cuerpo (armadura)
+            ctx.fillStyle = '#696969'; // Armadura gris
+            ctx.fillRect(offsetX + 22, 24, 20, 16);
+            
+            // Detalles de armadura
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(offsetX + 26, 26, 12, 2);
+            ctx.fillRect(offsetX + 26, 32, 12, 2);
+            
+            // Brazos
+            ctx.fillStyle = '#D2B48C'; // Piel
+            ctx.fillRect(offsetX + 14, 26, 6, 12);
+            ctx.fillRect(offsetX + 44, 26, 6, 12);
+            
+            // Espada (brazo derecho)
+            ctx.fillStyle = '#C0C0C0'; // Plata
+            ctx.fillRect(offsetX + 46, 18, 2, 12);
+            ctx.fillStyle = '#8B4513'; // Empuñadura
+            ctx.fillRect(offsetX + 45, 28, 4, 4);
+            
+            // Piernas
+            ctx.fillStyle = '#8B4513'; // Pantalones marrones
+            ctx.fillRect(offsetX + 24, 40, 6, 16);
+            ctx.fillRect(offsetX + 34, 40, 6, 16);
+            
+            // Botas
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(offsetX + 22, 54, 10, 6);
+            ctx.fillRect(offsetX + 32, 54, 10, 6);
+        }
+
+        function drawWarriorFrame2(offsetX) {
+            // Frame 2: Pierna izquierda adelante
+            
+            // Cabeza (igual)
+            ctx.fillStyle = '#D2B48C';
+            ctx.fillRect(offsetX + 24, 8, 16, 16);
+            
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(offsetX + 22, 6, 20, 10);
+            
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(offsetX + 26, 12, 2, 2);
+            ctx.fillRect(offsetX + 36, 12, 2, 2);
+            
+            // Cuerpo (igual)
+            ctx.fillStyle = '#696969';
+            ctx.fillRect(offsetX + 22, 24, 20, 16);
+            
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(offsetX + 26, 26, 12, 2);
+            ctx.fillRect(offsetX + 26, 32, 12, 2);
+            
+            // Brazos balanceándose
+            ctx.fillStyle = '#D2B48C';
+            ctx.fillRect(offsetX + 16, 28, 6, 12); // Brazo izq más adelante
+            ctx.fillRect(offsetX + 42, 24, 6, 12); // Brazo der más atrás
+            
+            // Espada
+            ctx.fillStyle = '#C0C0C0';
+            ctx.fillRect(offsetX + 44, 16, 2, 12);
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(offsetX + 43, 26, 4, 4);
+            
+            // Piernas - izquierda adelante
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(offsetX + 26, 40, 6, 16); // Pierna izq adelante
+            ctx.fillRect(offsetX + 32, 42, 6, 14); // Pierna der atrás
+            
+            // Botas
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(offsetX + 24, 54, 10, 6); // Bota izq adelante
+            ctx.fillRect(offsetX + 30, 56, 10, 4); // Bota der atrás
+        }
+
+        function drawWarriorFrame3(offsetX) {
+            // Frame 3: Pierna derecha adelante
+            
+            // Cabeza (igual)
+            ctx.fillStyle = '#D2B48C';
+            ctx.fillRect(offsetX + 24, 8, 16, 16);
+            
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(offsetX + 22, 6, 20, 10);
+            
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(offsetX + 26, 12, 2, 2);
+            ctx.fillRect(offsetX + 36, 12, 2, 2);
+            
+            // Cuerpo (igual)
+            ctx.fillStyle = '#696969';
+            ctx.fillRect(offsetX + 22, 24, 20, 16);
+            
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(offsetX + 26, 26, 12, 2);
+            ctx.fillRect(offsetX + 26, 32, 12, 2);
+            
+            // Brazos balanceándose (opuesto al frame 2)
+            ctx.fillStyle = '#D2B48C';
+            ctx.fillRect(offsetX + 12, 24, 6, 12); // Brazo izq atrás
+            ctx.fillRect(offsetX + 46, 28, 6, 12); // Brazo der adelante
+            
+            // Espada
+            ctx.fillStyle = '#C0C0C0';
+            ctx.fillRect(offsetX + 48, 20, 2, 12);
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(offsetX + 47, 30, 4, 4);
+            
+            // Piernas - derecha adelante
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(offsetX + 22, 42, 6, 14); // Pierna izq atrás
+            ctx.fillRect(offsetX + 32, 40, 6, 16); // Pierna der adelante
+            
+            // Botas
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(offsetX + 20, 56, 10, 4); // Bota izq atrás
+            ctx.fillRect(offsetX + 30, 54, 10, 6); // Bota der adelante
+        }
+
+        function downloadSprite(filename) {
+            const link = document.getElementById('downloadLink');
+            link.href = canvas.toDataURL();
+            link.download = filename;
+            link.style.display = 'block';
+            link.textContent = `Descargar ${filename}`;
+            link.click();
+        }
+    </script>
+</body>
+</html>

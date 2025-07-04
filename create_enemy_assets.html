@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crear Enemigos Pixel Art</title>
+</head>
+<body>
+    <h2>Generador de Enemigos Pixel Art</h2>
+    <canvas id="canvas" width="64" height="64"></canvas>
+    <br><br>
+    <button onclick="createEnemy2()">Crear Orco (Enemy2)</button>
+    <button onclick="createEnemy3()">Crear Dragón (Enemy3)</button>
+    <button onclick="createEnemy4()">Crear Esqueleto (Enemy4)</button>
+    <br><br>
+    <a id="downloadLink" style="display:none;">Descargar Sprite</a>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        function createEnemy2() {
+            // Orco verde
+            ctx.clearRect(0, 0, 64, 64);
+            
+            // Cuerpo verde oscuro
+            ctx.fillStyle = '#2d5016';
+            ctx.fillRect(20, 35, 24, 20);
+            
+            // Cabeza verde
+            ctx.fillStyle = '#4a7c59';
+            ctx.fillRect(18, 15, 28, 25);
+            
+            // Ojos rojos
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(22, 22, 4, 4);
+            ctx.fillRect(38, 22, 4, 4);
+            
+            // Colmillos blancos
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(26, 30, 2, 4);
+            ctx.fillRect(36, 30, 2, 4);
+            
+            // Brazos
+            ctx.fillStyle = '#4a7c59';
+            ctx.fillRect(12, 40, 8, 12);
+            ctx.fillRect(44, 40, 8, 12);
+            
+            // Piernas
+            ctx.fillRect(22, 55, 6, 8);
+            ctx.fillRect(36, 55, 6, 8);
+            
+            // Armadura marrón
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(22, 38, 20, 8);
+            
+            downloadSprite('beast2.png');
+        }
+
+        function createEnemy3() {
+            // Dragón rojo
+            ctx.clearRect(0, 0, 64, 64);
+            
+            // Cuerpo rojo
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(16, 30, 32, 25);
+            
+            // Cabeza de dragón
+            ctx.fillStyle = '#DC143C';
+            ctx.fillRect(14, 10, 36, 25);
+            
+            // Cuernos negros
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(18, 8, 4, 6);
+            ctx.fillRect(42, 8, 4, 6);
+            
+            // Ojos amarillos
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(22, 18, 4, 4);
+            ctx.fillRect(38, 18, 4, 4);
+            
+            // Pupilas negras
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(24, 20, 2, 2);
+            ctx.fillRect(40, 20, 2, 2);
+            
+            // Fosas nasales
+            ctx.fillRect(30, 25, 2, 2);
+            ctx.fillRect(32, 25, 2, 2);
+            
+            // Alas
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(8, 25, 8, 15);
+            ctx.fillRect(48, 25, 8, 15);
+            
+            // Garras
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(20, 55, 6, 8);
+            ctx.fillRect(38, 55, 6, 8);
+            
+            downloadSprite('beast3.png');
+        }
+
+        function createEnemy4() {
+            // Esqueleto
+            ctx.clearRect(0, 0, 64, 64);
+            
+            // Huesos del cuerpo (blanco hueso)
+            ctx.fillStyle = '#F5F5DC';
+            ctx.fillRect(22, 35, 20, 20);
+            
+            // Cráneo
+            ctx.fillRect(18, 12, 28, 28);
+            
+            // Cuencas de ojos negras
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(22, 20, 6, 6);
+            ctx.fillRect(36, 20, 6, 6);
+            
+            // Ojos rojos brillantes
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(24, 22, 2, 2);
+            ctx.fillRect(38, 22, 2, 2);
+            
+            // Nariz (agujero)
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(30, 28, 4, 4);
+            
+            // Boca con dientes
+            ctx.fillRect(26, 34, 12, 4);
+            ctx.fillStyle = '#F5F5DC';
+            ctx.fillRect(28, 34, 2, 4);
+            ctx.fillRect(32, 34, 2, 4);
+            ctx.fillRect(36, 34, 2, 4);
+            
+            // Brazos esqueleto
+            ctx.fillStyle = '#F5F5DC';
+            ctx.fillRect(14, 40, 6, 14);
+            ctx.fillRect(44, 40, 6, 14);
+            
+            // Piernas esqueleto
+            ctx.fillRect(24, 55, 5, 8);
+            ctx.fillRect(35, 55, 5, 8);
+            
+            // Túnica oscura
+            ctx.fillStyle = '#2F2F2F';
+            ctx.fillRect(20, 48, 24, 12);
+            
+            downloadSprite('beast4.png');
+        }
+
+        function downloadSprite(filename) {
+            const link = document.getElementById('downloadLink');
+            link.href = canvas.toDataURL();
+            link.download = filename;
+            link.style.display = 'block';
+            link.textContent = `Descargar ${filename}`;
+            link.click();
+        }
+    </script>
+</body>
+</html>
