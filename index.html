@@ -291,20 +291,20 @@
             // Detect if mobile device
             const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
             
-            // Adjust button size for mobile
-            const buttonSize = isMobile ? 70 : 50;
-            const buttonSpacing = isMobile ? 90 : 60;
-            const controlsHeight = isMobile ? 120 : 80;
-            const controlsY = mazeEndY + (isMobile ? 60 : 40);
+            // Adjust button size for mobile - much larger
+            const buttonSize = isMobile ? 100 : 80;
+            const buttonSpacing = isMobile ? 130 : 100;
+            const controlsHeight = isMobile ? 180 : 140;
+            const controlsY = mazeEndY + (isMobile ? 80 : 60);
             
             // Mobile control background
             this.mobileControlsBg = this.add.rectangle(width / 2, controlsY, width, controlsHeight, 0x2F2F2F, 0.8);
             
             // Virtual directional buttons with better mobile spacing
-            this.createDirectionalButton(width / 2, controlsY - (isMobile ? 40 : 30), '↑', 'up', buttonSize);
+            this.createDirectionalButton(width / 2, controlsY - (isMobile ? 50 : 40), '↑', 'up', buttonSize);
             this.createDirectionalButton(width / 2 - buttonSpacing, controlsY + (isMobile ? 10 : 5), '←', 'left', buttonSize);
             this.createDirectionalButton(width / 2 + buttonSpacing, controlsY + (isMobile ? 10 : 5), '→', 'right', buttonSize);
-            this.createDirectionalButton(width / 2, controlsY + (isMobile ? 60 : 40), '↓', 'down', buttonSize);
+            this.createDirectionalButton(width / 2, controlsY + (isMobile ? 70 : 50), '↓', 'down', buttonSize);
             
             // Virtual cursor state
             this.virtualCursors = {
@@ -318,7 +318,7 @@
         createDirectionalButton(x, y, text, direction, size = 45) {
             // Detect if mobile for larger buttons
             const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
-            const fontSize = isMobile ? '32px' : '24px';
+            const fontSize = isMobile ? '48px' : '36px';
             
             // Button background with 3D effect
             const button = this.add.rectangle(x, y, size, size, 0x654321);
@@ -872,16 +872,16 @@
 
         createNumericKeypad() {
             const { width, height } = this.scale;
-            const gameAreaHeight = 480;
             // Detect mobile device
             const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
+            const gameAreaHeight = isMobile ? 520 : 480;
             
-            // Adjust sizes for mobile
-            const keypadHeight = isMobile ? 220 : 160;
-            const keypadStartY = gameAreaHeight + (isMobile ? 30 : 20);
-            const buttonSize = isMobile ? 55 : 35;
-            const spacing = isMobile ? 70 : 45;
-            const rowSpacing = isMobile ? 60 : 40;
+            // Adjust sizes for mobile - much larger
+            const keypadHeight = isMobile ? 320 : 240;
+            const keypadStartY = gameAreaHeight + (isMobile ? 40 : 30);
+            const buttonSize = isMobile ? 80 : 65;
+            const spacing = isMobile ? 100 : 80;
+            const rowSpacing = isMobile ? 85 : 70;
             
             // Keypad background
             const keypadY = gameAreaHeight + keypadHeight / 2;
@@ -928,12 +928,12 @@
             // Detect mobile for larger text
             const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
             
-            // Button text with mobile scaling
+            // Button text with mobile scaling - much larger
             let fontSize;
             if (isMobile) {
-                fontSize = isOK ? '20px' : '28px';
+                fontSize = isOK ? '32px' : '42px';
             } else {
-                fontSize = isOK ? '14px' : '20px';
+                fontSize = isOK ? '24px' : '32px';
             }
             
             const buttonText = this.add.text(x, y, text, {
@@ -1325,7 +1325,7 @@
 
     // Detect mobile device and adjust game height
     const isMobile = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < window.innerHeight;
-    const gameHeight = isMobile ? 800 : 640; // Extra height for mobile keyboards
+    const gameHeight = isMobile ? 1000 : 900; // Much more height for larger keyboards
     
     const config = {
         type: Phaser.AUTO,
